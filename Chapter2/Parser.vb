@@ -40,7 +40,7 @@ Public Class Parser
                 )
         End Select
 
-        result = New ParseStatus(1, _
+        result = New ParseStatus(errorcode, _
                     message, _
                     m_CharPos + 1, _
                     m_linePos)
