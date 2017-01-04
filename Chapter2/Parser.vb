@@ -77,6 +77,10 @@ Public Class Parser
     Private Function IsMulOrDivOperator(ByVal c As Char) As Boolean
         Return "*/".IndexOf(c) > -1
     End Function
+
+    Private Function IsAddOrSubOperator(ByVal c As Char) As Boolean
+        Return "+-".IndexOf(c) > -1
+    End Function
 #End Region
 
 #Region "Scanner"
@@ -161,6 +165,15 @@ Public Class Parser
             m_CharPos += 1
         End If
     End Sub
+
+    Private Sub ScanAddOrSubOperator()
+        m_CurrentTokenBldr = New StringBuilder
+
+        If IsAddOrSubOperator(LookAhead) Then
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        End If
+    End Sub
 #End Region
 
 #Region "Parser"
@@ -169,7 +182,7 @@ Public Class Parser
 
         SkipWhiteSpace()
 
-        result = ParseTerm()
+        result = ParseNumericExpression()
 
         If result.code = 0 Then
             m_Gen.EmitWriteLine()
@@ -251,6 +264,46 @@ Public Class Parser
         Return result
     End Function
 
+    Private Function ParseAddOrSubOperator() As ParseStatus
+        Dim result As ParseStatus
+        Dim currentoperator As String = CurrentToken
+
+        SkipWhiteSpace()
+
+        result = ParseTerm()
+
+        If result.Code = 0 Then
+            If currentoperator = "+" Then
+                m_Gen.EmitAdd()
+            Else
+                m_Gen.EmitSubtract()
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseNumericExpression() As ParseStatus
+        Dim result As ParseStatus
+
+        result = ParseTerm()
+
+        Do While result.Code = 0 _
+            AndAlso _
+            IsAddOrSubOperator(LookAhead)
+
+            ScanAddOrSubOperator()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, "+ or -")
+            Else
+                result = ParseAddOrSubOperator()
+                SkipWhiteSpace()
+            End If
+        Loop
+
+        Return result
+    End Function
 #End Region
 
     Public Function Parse() As ParseStatus
