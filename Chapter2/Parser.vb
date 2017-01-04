@@ -35,7 +35,7 @@ Public Class Parser
                 message = "Ok."
             Case 1
                 message = String.Format( _
-                            "Expected '{0}'", _
+                            "Expected {0}", _
                             errorDescription _
                 )
         End Select
@@ -57,6 +57,12 @@ Public Class Parser
         If Char.IsDigit(c) Then
             ' Use the CLR's built-in digit recognition
             result = True
+        ElseIf "+-".IndexOf(c) <> -1 And _
+            TokenLength = 0 Then
+            ' If the symbol being cheked is + or -
+            ' AND we are at the START of the current
+            ' token
+            result = True
         Else
             result = False
         End If
@@ -66,6 +72,10 @@ Public Class Parser
 
     Private Function IsWhiteSpace(ByVal c As Char) As Boolean
         Return Char.IsWhiteSpace(c)
+    End Function
+
+    Private Function IsMulOrDivOperator(ByVal c As Char) As Boolean
+        Return "*/".IndexOf(c) > -1
     End Function
 #End Region
 
@@ -142,6 +152,15 @@ Public Class Parser
             End If
         Loop
     End Sub
+
+    Private Sub ScanMulOrDivOperator()
+        m_CurrentTokenBldr = New StringBuilder
+
+        If IsMulOrDivOperator(LookAhead) Then
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        End If
+    End Sub
 #End Region
 
 #Region "Parser"
@@ -150,7 +169,7 @@ Public Class Parser
 
         SkipWhiteSpace()
 
-        result = ParseNumber()
+        result = ParseTerm()
 
         If result.code = 0 Then
             m_Gen.EmitWriteLine()
@@ -166,7 +185,11 @@ Public Class Parser
         ScanNumber()
 
         If TokenLength = 0 Then
-            result = CreateError(1, " a number")
+            result = CreateError(1, "a number")
+        ElseIf TokenLength = 1 AndAlso _
+                Not Char.IsDigit(CurrentToken.Chars(0)) _
+                Then 
+            result = CreateError(1, "a number")
         Else
             ' Get the current token, and
             ' Emit it
@@ -176,6 +199,58 @@ Public Class Parser
 
         Return result
     End Function
+
+    Private Function ParseFactor() As ParseStatus
+        Dim result As ParseStatus
+
+        result = ParseNumber()
+
+        SkipWhiteSpace()
+
+        Return result
+    End Function
+
+    Private Function ParseMulOrDivOperator() As ParseStatus
+        Dim result As ParseStatus
+        Dim currentoperator As String = CurrentToken
+
+        SkipWhiteSpace()
+
+        result = ParseFactor()
+
+        If result.Code = 0 Then
+            If currentoperator = "*" Then
+                m_Gen.EmitMultiply()
+            Else
+                m_Gen.EmitDivide()
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseTerm() As ParseStatus
+        Dim result As ParseStatus
+
+        result = ParseFactor()
+
+        Do While result.Code = 0 _
+            AndAlso _
+            IsMulOrDivOperator(LookAhead)
+
+            ScanMulOrDivOperator()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, "* or /")
+            Else
+                result = ParseMulOrDivOperator()
+                SkipWhiteSpace()
+            End If
+        Loop
+
+        Return result
+    End Function
+
 #End Region
 
     Public Function Parse() As ParseStatus
