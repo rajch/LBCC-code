@@ -63,6 +63,10 @@ Public Class Parser
 
         Return result
     End Function
+
+    Private Function IsWhiteSpace(ByVal c As Char) As Boolean
+        Return Char.IsWhiteSpace(c)
+    End Function
 #End Region
 
 #Region "Scanner"
@@ -128,11 +132,23 @@ Public Class Parser
             m_CharPos += 1
         Loop
     End Sub
+
+    Private Sub SkipWhiteSpace()
+        Do While IsWhiteSpace(LookAhead)
+            If EndOfLine() Then
+                Exit Do
+            Else
+                m_CharPos += 1
+            End If
+        Loop
+    End Sub
 #End Region
 
 #Region "Parser"
     Private Function ParseLine() As ParseStatus
         Dim result As ParseStatus
+
+        SkipWhiteSpace()
 
         result = ParseNumber()
 
