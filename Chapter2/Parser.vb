@@ -51,7 +51,18 @@ Public Class Parser
 #End Region
 
 #Region "Recognizers"
+    Private Function IsNumeric(ByVal c As Char) As Boolean
+        Dim result As Boolean
 
+        If Char.IsDigit(c) Then
+            ' Use the CLR's built-in digit recognition
+            result = True
+        Else
+            result = False
+        End If
+
+        Return result
+    End Function
 #End Region
 
 #Region "Scanner"
@@ -105,11 +116,47 @@ Public Class Parser
 
         Return result
     End Function
+
+    Private Sub ScanNumber()
+        m_CurrentTokenBldr = New StringBuilder
+
+        Do While m_CharPos < m_LineLength
+            If Not IsNumeric(LookAhead) Then
+                Exit Do
+            End If
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        Loop
+    End Sub
 #End Region
 
 #Region "Parser"
     Private Function ParseLine() As ParseStatus
         Dim result As ParseStatus
+
+        result = ParseNumber()
+
+        If result.code = 0 Then
+            m_Gen.EmitWriteLine()
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseNumber() As ParseStatus
+        Dim result As ParseStatus
+
+        ' Ask the scanner to read a number
+        ScanNumber()
+
+        If TokenLength = 0 Then
+            result = CreateError(1, " a number")
+        Else
+            ' Get the current token, and
+            ' Emit it
+            m_Gen.EmitNumber(CInt(CurrentToken))
+            result = CreateError(0, "Ok")
+        End If
 
         Return result
     End Function
