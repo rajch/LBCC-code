@@ -189,7 +189,11 @@ Public Class Parser
         result = ParseNumericExpression()
 
         If result.code = 0 Then
-            m_Gen.EmitWriteLine()
+            If Not EndOfLine() Then
+                result = CreateError(1, "end of statement")
+            Else
+                m_Gen.EmitWriteLine()
+            End If
         End If
 
         Return result
