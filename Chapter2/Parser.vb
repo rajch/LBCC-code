@@ -330,9 +330,12 @@ Public Class Parser
 
     Public Function Parse() As ParseStatus
         Dim result As ParseStatus
-        If ScanLine() Then
+        Do While ScanLine()
             result = ParseLine()
-        End If
+            If result.Code <> 0 Then
+                Exit Do
+            End If
+        Loop
         Return result
     End Function
 
