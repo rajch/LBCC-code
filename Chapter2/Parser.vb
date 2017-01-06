@@ -174,6 +174,10 @@ Public Class Parser
             m_CharPos += 1
         End If
     End Sub
+
+    Private Sub SkipCharacter()
+        m_CharPos += 1
+    End Sub
 #End Region
 
 #Region "Parser"
@@ -216,7 +220,21 @@ Public Class Parser
     Private Function ParseFactor() As ParseStatus
         Dim result As ParseStatus
 
-        result = ParseNumber()
+        If LookAhead.Equals("("c) Then
+            SkipCharacter()
+
+            result = ParseNumericExpression()
+
+            If result.Code = 0 Then
+                If Not LookAhead.Equals(")"c) Then
+                    result = CreateError(1, ")")
+                Else
+                    SkipCharacter()
+                End If
+            End If
+        Else
+            result = ParseNumber()
+        End If
 
         SkipWhiteSpace()
 
