@@ -84,6 +84,10 @@ Public Class Parser
     Private Function IsAddOrSubOperator(ByVal c As Char) As Boolean
         Return "+-".IndexOf(c) > -1
     End Function
+
+    Private Function IsConcatOperator(c As Char) As Boolean
+        Return "&+".IndexOf(c) > -1
+    End Function
 #End Region
 
 #Region "Scanner"
@@ -214,6 +218,15 @@ Public Class Parser
             m_EmptyStringFlag = True
         End If
     End Sub
+
+    Private Sub ScanConcatOperator
+        m_CurrentTokenBldr = New StringBuilder
+        
+        If IsConcatOperator(LookAhead) Then
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        End If	
+    End Sub
 #End Region
 
 #Region "Parser"
@@ -223,7 +236,8 @@ Public Class Parser
         SkipWhiteSpace()
 
         ' result = ParseNumericExpression()
-        result = ParseString()
+        ' result = ParseString()
+        result = ParseStringExpression()
 
         If result.code = 0 Then
             If Not EndOfLine() Then
@@ -380,6 +394,44 @@ Public Class Parser
         SkipWhiteSpace()
         
         Return result
+    End Function
+
+    Private Function ParseConcatOperator() As ParseStatus
+        Dim result As ParseStatus
+        Dim currentoperator As String = CurrentToken
+        
+        SkipWhiteSpace()
+        
+        result = ParseString()
+        
+        If result.code = 0 Then
+            m_Gen.EmitConcat
+        End If
+        
+        Return result
+    End Function	
+
+    Private Function ParseStringExpression() As ParseStatus
+                
+        Dim result As ParseStatus
+        
+        result = ParseString()
+        
+        Do While result.code=0 _
+            AndAlso _
+            IsConcatOperator(LookAhead) 
+            
+            ScanConcatOperator()
+            
+            If TokenLength=0 Then
+                result = CreateError(1, "& or +")
+            Else
+                result = ParseConcatOperator()
+                SkipWhiteSpace()
+            End If
+        Loop
+                    
+        Return result	
     End Function
 #End Region
 

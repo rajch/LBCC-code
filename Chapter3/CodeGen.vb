@@ -129,4 +129,17 @@ Public Class CodeGen
 		m_producedAssembly.Save(m_SaveToFile)
 	End Sub
 
+	Public Sub EmitConcat()
+		Dim stringtype As Type = Type.GetType("System.String")
+		Dim paramtypes() As Type = { stringtype, stringtype }
+
+		Dim concatmethod as MethodInfo = stringtype.GetMethod( _
+				"Concat", paramtypes _
+		)
+
+		m_ILGen.Emit( _
+			Opcodes.Call, _
+			concatmethod
+		)
+	End Sub
 End Class
