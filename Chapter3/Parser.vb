@@ -19,6 +19,9 @@ Public Class Parser
 
     ' The current program element
     Private m_CurrentTokenBldr As StringBuilder
+
+    ' Whether the last string scanned was empty
+    Private m_EmptyStringFlag As Boolean = False
 #End Region
 
 #Region "Helper Functions"
@@ -178,6 +181,39 @@ Public Class Parser
     Private Sub SkipCharacter()
         m_CharPos += 1
     End Sub
+
+    Private Sub ScanString()
+        m_EmptyStringFlag = False
+        m_CurrentTokenBldr = New StringBuilder
+
+        If Not LookAhead.Equals(""""c) Then
+            Exit Sub
+        End If
+
+        Do While LookAhead.Equals(""""c)
+            SkipCharacter()
+            Do While Not LookAhead.Equals(""""c)
+
+                If EndOfLine Then
+                    m_CurrentTokenBldr = New StringBuilder
+                    Exit Sub
+                End If
+
+                m_CurrentTokenBldr.Append(LookAhead)
+                m_CharPos += 1
+            Loop
+
+            SkipCharacter()
+
+            If LookAhead.Equals(""""c) Then
+                m_CurrentTokenBldr.Append(LookAhead)
+            End If
+        Loop
+
+        If TokenLength = 0 Then
+            m_EmptyStringFlag = True
+        End If
+    End Sub
 #End Region
 
 #Region "Parser"
@@ -186,13 +222,15 @@ Public Class Parser
 
         SkipWhiteSpace()
 
-        result = ParseNumericExpression()
+        ' result = ParseNumericExpression()
+        result = ParseString()
 
         If result.code = 0 Then
             If Not EndOfLine() Then
                 result = CreateError(1, "end of statement")
             Else
-                m_Gen.EmitWriteLine()
+                ' m_Gen.EmitWriteLine()
+                m_Gen.EmitWriteLineString()
             End If
         End If
 
@@ -324,6 +362,23 @@ Public Class Parser
             End If
         Loop
 
+        Return result
+    End Function
+
+    Private Function ParseString() As ParseStatus
+        Dim result As ParseStatus
+        
+        ScanString()
+        
+        If TokenLength = 0 And Not m_EmptyStringFlag Then
+            result = CreateError(1, "a valid string.")
+        Else
+            m_Gen.EmitString(CurrentToken)
+            result = CreateError(0,"Ok")
+        End If
+        
+        SkipWhiteSpace()
+        
         Return result
     End Function
 #End Region
