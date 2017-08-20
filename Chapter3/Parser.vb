@@ -22,6 +22,9 @@ Public Class Parser
 
     ' Whether the last string scanned was empty
     Private m_EmptyStringFlag As Boolean = False
+
+    ' The type of the last processed expression
+    Private m_LastTypeProcessed As Type 
 #End Region
 
 #Region "Helper Functions"
@@ -232,22 +235,29 @@ Public Class Parser
 #Region "Parser"
     Private Function ParseLine() As ParseStatus
         Dim result As ParseStatus
-
+        
         SkipWhiteSpace()
-
-        ' result = ParseNumericExpression()
-        ' result = ParseString()
-        result = ParseStringExpression()
-
+        
+        m_LastTypeProcessed = Nothing
+        
+        result = ParseExpression()
+        
         If result.code = 0 Then
             If Not EndOfLine() Then
                 result = CreateError(1, "end of statement")
             Else
-                ' m_Gen.EmitWriteLine()
-                m_Gen.EmitWriteLineString()
+                If m_LastTypeProcessed.Equals( _
+                                        Type.GetType("System.Int32") _
+                                    ) Then
+                    m_Gen.EmitWriteLine()
+                ElseIf m_LastTypeProcessed.Equals( _
+                                            Type.GetType("System.String") _
+                                    ) Then
+                    m_Gen.EmitWriteLineString()
+                End If
             End If
         End If
-
+        
         Return result
     End Function
 
@@ -376,6 +386,8 @@ Public Class Parser
             End If
         Loop
 
+        m_LastTypeProcessed = Type.GetType("System.Int32")
+
         Return result
     End Function
 
@@ -430,8 +442,36 @@ Public Class Parser
                 SkipWhiteSpace()
             End If
         Loop
-                    
+
+        m_LastTypeProcessed = Type.GetType("System.String")
+
         Return result	
+    End Function
+
+    Private Function ParseExpression( _
+                        Optional ByVal expressiontype _
+                            As Type = Nothing) _
+            As ParseStatus
+
+        Dim result As ParseStatus
+
+        ' Since we are doing the work of the scanner by using the
+        ' lookahead character, we need to initialize the token
+        ' builder
+        m_CurrentTokenBldr = New StringBuilder
+
+        If LookAhead.Equals(""""c) Then
+            result = ParseStringExpression()
+        ElseIf IsNumeric(LookAhead) Then
+            result = ParseNumericExpression()
+        ElseIf LookAhead.Equals("("c) Then
+            ' For now, assuming only numeric expressions can use ()
+            result = ParseNumericExpression()
+        Else
+            result = CreateError(1, "a numeric or string expression")
+        End If
+
+        Return result
     End Function
 #End Region
 
