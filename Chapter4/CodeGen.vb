@@ -39,6 +39,38 @@ Public Class CodeGen
 		m_ILGen.Emit(OpCodes.Div)
 	End Sub
 
+	Public Sub EmitEqualityComparison()
+		m_ILGen.Emit(Opcodes.Ceq)
+	End Sub
+
+	Public Sub EmitGreaterThanComparison()
+		m_ILGen.Emit(OpCodes.Cgt)
+	End Sub
+
+	Public Sub EmitLessThanComparison()
+		m_ILGen.Emit(OpCodes.Clt)
+	End Sub
+
+	Private Sub NegateComparison
+		EmitNumber(0)
+		EmitEqualityComparison
+	End Sub
+
+	Public Sub EmitInEqualityComparison
+		EmitEqualityComparison
+		NegateComparison
+	End Sub
+
+	Public Sub EmitGreaterThanOrEqualToComparison
+		EmitLessThanComparison
+		NegateComparison
+	End Sub
+
+	Public Sub EmitLessThanOrEqualToComparison
+		EmitGreaterThanComparison
+		NegateComparison
+	End Sub
+
 	Public Sub EmitWriteLine()
 		Dim inttype As Type = Type.GetType("System.Int32")
 		Dim consoletype As Type = Type.GetType("System.Console")
@@ -63,6 +95,21 @@ Public Class CodeGen
 				"WriteLine", paramtypes _
 			) _
 		)
+	End Sub
+
+	Public Sub EmitWriteLineBoolean()
+		Dim booltype As Type = _
+			Type.GetType("System.Boolean")
+			
+		Dim consoletype As Type = _
+			Type.GetType("System.Console")
+		
+		Dim paramtypes() As Type = _
+			{ booltype}
+		
+		m_ILGen.Emit(Opcodes.Call, _
+			consoletype.GetMethod( _
+			"WriteLine", paramtypes))
 	End Sub
 
 	Public Sub New(ByVal FileName As String)

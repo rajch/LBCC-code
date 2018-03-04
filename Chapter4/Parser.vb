@@ -91,6 +91,10 @@ Public Class Parser
     Private Function IsConcatOperator(c As Char) As Boolean
         Return "&+".IndexOf(c) > -1
     End Function
+
+    Private Function IsRelOperator(c As Char) As Boolean
+        Return "=><!".IndexOf(c)>-1
+    End Function
 #End Region
 
 #Region "Scanner"
@@ -230,36 +234,56 @@ Public Class Parser
             m_CharPos += 1
         End If	
     End Sub
+
+    Private Sub ScanRelOperator
+        m_CurrentTokenBldr = New StringBuilder
+        
+        Do While IsRelOperator(LookAhead)
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        Loop
+
+        Select Case CurrentToken
+            Case "=","==", "===", "<>", "!=", "!==", ">", "<", ">=", "=>","<=","=<"
+                ' Valid relational operator
+            Case Else
+                m_CurrentTokenBldr = New StringBuilder
+        End Select
+    End Sub 
 #End Region
 
 #Region "Parser"
-    Private Function ParseLine() As ParseStatus
-        Dim result As ParseStatus
-        
-        SkipWhiteSpace()
-        
-        m_LastTypeProcessed = Nothing
-        
-        result = ParseExpression()
-        
-        If result.code = 0 Then
-            If Not EndOfLine() Then
-                result = CreateError(1, "end of statement")
-            Else
-                If m_LastTypeProcessed.Equals( _
-                                        Type.GetType("System.Int32") _
-                                    ) Then
-                    m_Gen.EmitWriteLine()
-                ElseIf m_LastTypeProcessed.Equals( _
-                                            Type.GetType("System.String") _
-                                    ) Then
-                    m_Gen.EmitWriteLineString()
-                End If
+Private Function ParseLine() As ParseStatus
+    Dim result As ParseStatus
+    
+    SkipWhiteSpace()
+    
+    m_LastTypeProcessed = Nothing
+    
+    result = ParseExpression()
+    
+    If result.code = 0 Then
+        If Not EndOfLine() Then
+            result = CreateError(1, "end of statement")
+        Else
+            If m_LastTypeProcessed.Equals( _
+                                    Type.GetType("System.Int32") _
+                                ) Then
+                m_Gen.EmitWriteLine()
+            ElseIf m_LastTypeProcessed.Equals( _
+                                        Type.GetType("System.String") _
+                                ) Then
+                m_Gen.EmitWriteLineString()
+            ElseIf m_LastTypeProcessed.Equals( _
+                                        Type.GetType("System.Boolean") _
+                                ) Then
+                m_Gen.EmitWriteLineBoolean()
             End If
         End If
-        
-        Return result
-    End Function
+    End If
+    
+    Return result
+End Function
 
     Private Function ParseNumber() As ParseStatus
         Dim result As ParseStatus
@@ -448,6 +472,109 @@ Public Class Parser
         Return result	
     End Function
 
+    Private Sub GenerateRelOperation( _
+            reloperator As String, _
+            conditionType As Type)
+            
+        If conditionType.Equals( _
+                Type.GetType("System.Int32")
+            ) Then
+            Select Case reloperator
+                Case "=", "==", "==="
+                    m_Gen.EmitEqualityComparison()
+                Case ">"
+                    m_Gen.EmitGreaterThanComparison()
+                Case "<"
+                    m_Gen.EmitLessThanComparison()
+                Case ">=", "=>"
+                    m_Gen.EmitGreaterThanOrEqualToComparison()
+                Case "<=", "=<"
+                    m_Gen.EmitLessThanOrEqualToComparison()
+                Case "<>", "!=", "!=="
+                    m_Gen.EmitInEqualityComparison()
+            End Select
+        End If
+    End Sub
+
+    Private Function ParseRelOperator() _
+            As ParseStatus
+            
+        Dim result As ParseStatus
+        Dim reloperator As String = CurrentToken
+        Dim conditiontype As Type = m_LastTypeProcessed
+        
+        SkipWhiteSpace()
+        
+        ' The expression after a relational operator
+        ' should match the type of the expression
+        ' before it
+        If conditiontype.Equals( _
+                Type.GetType("System.Int32") _
+            ) Then
+
+            result = ParseNumericExpression()
+        ElseIf conditiontype.Equals( _
+                Type.GetType("System.String") _
+            ) Then
+
+            result = ParseStringExpression()
+        Else
+            result = CreateError(1, "an expression of type " & _
+                            conditiontype.ToString())
+        End If
+
+        If result.Code = 0 Then
+            GenerateRelOperation(reloperator, conditiontype)
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseCondition( _
+                        Optional lastexpressiontype As Type = Nothing _
+        ) As ParseStatus
+
+        Dim result As ParseStatus
+
+        If lastexpressiontype Is Nothing Then
+            result = ParseExpression()
+        Else
+            m_LastTypeProcessed = lastexpressiontype
+            result = CreateError(0,"")
+        End If
+
+        If result.Code = 0 Then
+
+            ScanRelOperator()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, "a relational operator.")
+            Else
+                result = ParseRelOperator()
+                SkipWhiteSpace()
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseBooleanExpression( _
+                        Optional lastexpressiontype As Type = Nothing _
+        ) As ParseStatus
+
+        Dim result As ParseStatus
+
+        result = ParseCondition(lastexpressiontype)
+        
+        If result.Code = 0 Then
+            m_LastTypeProcessed = _
+                Type.GetType( _
+                "System.Boolean")
+        End If
+        
+        Return result
+    End Function
+
     Private Function ParseExpression( _
                         Optional ByVal expressiontype _
                             As Type = Nothing) _
@@ -468,7 +595,18 @@ Public Class Parser
             ' For now, assuming only numeric expressions can use ()
             result = ParseNumericExpression()
         Else
-            result = CreateError(1, "a numeric or string expression")
+            result = CreateError(1, "a boolean, numeric or string expression")
+        End If
+
+        If result.Code = 0 Then
+            ' If a relational operator follows the expression just parsed
+            ' we are in the middle of a Boolean expression. Our work is
+            ' not yet done.
+            If IsRelOperator(LookAhead) Then
+                ' Parse a boolean expression, letting it know that the
+                ' first part has already been parsed.
+                result = ParseBooleanExpression(m_LastTypeProcessed)
+            End If
         End If
 
         Return result
