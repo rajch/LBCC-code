@@ -479,6 +479,7 @@ End Function
         If conditionType.Equals( _
                 Type.GetType("System.Int32")
             ) Then
+
             Select Case reloperator
                 Case "=", "==", "==="
                     m_Gen.EmitEqualityComparison()
@@ -493,6 +494,26 @@ End Function
                 Case "<>", "!=", "!=="
                     m_Gen.EmitInEqualityComparison()
             End Select
+
+        ElseIf conditionType.Equals( _
+                Type.GetType("System.String")
+            ) Then
+
+            Select Case reloperator
+                Case "=", "==", "==="
+                    m_Gen.EmitStringEquality()
+                Case ">"
+                    m_Gen.EmitStringGreaterThan()
+                Case "<"
+                    m_Gen.EmitStringLessThan()
+                Case ">=", "=>"
+                    m_Gen.EmitStringGreaterThanOrEqualTo()
+                Case "<=", "=<"
+                    m_Gen.EmitStringLessThanOrEqualTo()
+                Case "<>", "!=", "!=="
+                    m_Gen.EmitStringInequality()
+            End Select
+
         End If
     End Sub
 

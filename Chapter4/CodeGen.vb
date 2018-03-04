@@ -71,6 +71,57 @@ Public Class CodeGen
 		NegateComparison
 	End Sub
 
+	Private Sub EmitStringCompare()
+		Dim stringtype As Type = _
+			Type.GetType("System.String")
+
+		Dim paramtypes() As Type = _
+			{stringtype, stringtype}
+
+		m_ILGen.Emit( _
+				OpCodes.Call, _
+				stringtype.GetMethod( _
+						"CompareOrdinal", _
+						paramtypes _
+				) _
+		)
+	End Sub
+
+	Public Sub EmitStringEquality()
+		EmitStringCompare()
+		EmitNumber(0)
+		EmitEqualityComparison()
+	End Sub
+
+	Public Sub EmitStringInequality()
+		EmitStringEquality()
+		NegateComparison()
+	End Sub
+
+	Public Sub EmitStringGreaterThan()
+		EmitStringCompare()
+		EmitNumber(0)
+		EmitGreaterThanComparison()
+	End Sub
+
+	Public Sub EmitStringLessThan()
+		EmitStringCompare()
+		EmitNumber(0)
+		EmitLessThanComparison()
+	End Sub
+
+	Public Sub EmitStringGreaterThanOrEqualTo()
+		EmitStringCompare()
+		EmitNumber(-1)
+		EmitGreaterThanComparison()
+	End Sub
+
+	Public Sub EmitStringLessThanOrEqualTo()
+		EmitStringCompare()
+		EmitNumber(1)
+		EmitLessThanComparison()
+	End Sub
+
 	Public Sub EmitWriteLine()
 		Dim inttype As Type = Type.GetType("System.Int32")
 		Dim consoletype As Type = Type.GetType("System.Console")
