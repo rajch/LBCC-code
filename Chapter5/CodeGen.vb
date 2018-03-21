@@ -51,22 +51,22 @@ Public Class CodeGen
 		m_ILGen.Emit(OpCodes.Clt)
 	End Sub
 
-	Private Sub NegateComparison
+	Private Sub NegateComparison()
 		EmitNumber(0)
 		EmitEqualityComparison
 	End Sub
 
-	Public Sub EmitInEqualityComparison
+	Public Sub EmitInEqualityComparison()
 		EmitEqualityComparison
 		NegateComparison
 	End Sub
 
-	Public Sub EmitGreaterThanOrEqualToComparison
+	Public Sub EmitGreaterThanOrEqualToComparison()
 		EmitLessThanComparison
 		NegateComparison
 	End Sub
 
-	Public Sub EmitLessThanOrEqualToComparison
+	Public Sub EmitLessThanOrEqualToComparison()
 		EmitGreaterThanComparison
 		NegateComparison
 	End Sub
@@ -120,6 +120,18 @@ Public Class CodeGen
 		EmitStringCompare()
 		EmitNumber(1)
 		EmitLessThanComparison()
+	End Sub
+
+	Public Sub EmitBitwiseAnd()
+		m_ILGen.Emit(OpCodes.And)
+	End Sub
+
+	Public Sub EmitBitwiseOr()
+		m_ILGen.Emit(OpCodes.Or)
+	End Sub
+
+	Public Sub EmitLogicalNot()
+		NegateComparison()
 	End Sub
 
 	Public Sub EmitWriteLine()

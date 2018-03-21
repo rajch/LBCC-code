@@ -95,6 +95,18 @@ Public Class Parser
     Private Function IsRelOperator(c As Char) As Boolean
         Return "=><!".IndexOf(c)>-1
     End Function
+
+    Private Function IsNotOperator(ByVal c As Char) As Boolean
+        Return "nNoOtT!".IndexOf(c) > -1
+    End Function
+
+    Private Function IsAndOperator(ByVal c As Char) As Boolean
+        Return "aAnNdD&".IndexOf(c) > -1
+    End Function
+
+    Private Function IsOrOperator(ByVal c As Char) As Boolean
+        Return "oOrR|".IndexOf(c) > -1
+    End Function
 #End Region
 
 #Region "Scanner"
@@ -249,7 +261,55 @@ Public Class Parser
             Case Else
                 m_CurrentTokenBldr = New StringBuilder
         End Select
-    End Sub 
+    End Sub
+
+    Private Sub ScanNotOperator()
+        m_CurrentTokenBldr = New StringBuilder
+
+        Do While IsNotOperator(LookAhead)
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        Loop
+
+        Select Case CurrentToken.ToLowerInvariant()
+            Case "not", "!"
+                ' Valid NOT operator
+            Case Else
+                m_CurrentTokenBldr = New StringBuilder
+        End Select
+    End Sub
+
+    Private Sub ScanAndOperator()
+        m_CurrentTokenBldr = New StringBuilder
+
+        Do While IsAndOperator(LookAhead)
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        Loop
+
+        Select Case CurrentToken.ToLowerInvariant()
+            Case "and", "&"
+                ' Valid AND operator
+            Case Else
+                m_CurrentTokenBldr = New StringBuilder
+        End Select
+    End Sub
+
+    Private Sub ScanOrOperator()
+        m_CurrentTokenBldr = New StringBuilder
+
+        Do While IsOrOperator(LookAhead)
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        Loop
+
+        Select Case CurrentToken.ToLowerInvariant()
+            Case "or", "|"
+                ' Valid OR operator
+            Case Else
+                m_CurrentTokenBldr = New StringBuilder
+        End Select
+    End Sub
 #End Region
 
 #Region "Parser"
@@ -558,7 +618,7 @@ End Function
         Dim result As ParseStatus
 
         If lastexpressiontype Is Nothing Then
-            result = ParseExpression()
+            result = ParseExpression(Type.GetType("System.Boolean"))
         Else
             m_LastTypeProcessed = lastexpressiontype
             result = CreateError(0,"")
@@ -579,20 +639,176 @@ End Function
         Return result
     End Function
 
+    Private Function ParseBooleanFactor( _
+                        Optional lastexpressiontype As Type = Nothing _
+        ) As ParseStatus
+
+        Dim result As ParseStatus
+
+        If LookAhead.Equals("("c) Then
+            SkipCharacter()
+
+            result = ParseBooleanExpression()
+
+            If result.Code = 0 Then
+                If Not LookAhead.Equals(")"c) Then
+                    result = CreateError(1, ")")
+                Else
+                    SkipCharacter()
+                End If
+            End If
+        Else
+            result = ParseCondition(lastexpressiontype)
+        End If
+
+        SkipWhiteSpace()
+
+        Return result
+    End Function
+
+    Private Function ParseNotOperator() _
+        As ParseStatus
+
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+
+        result = ParseBooleanFactor()
+
+        If result.Code = 0 Then
+            m_Gen.EmitLogicalNot()
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseNotOperation( _
+                        Optional lastexpressiontype As Type = Nothing _
+        ) As ParseStatus
+
+        Dim result As ParseStatus
+
+        ' If lastexpressiontype has a value, it means we are halfway
+        ' through parsing a boolean condition, and have just met a 
+        ' relational operator. A NOT operator cannot appear at this
+        ' point, so we just continue to parse a boolean factor
+        If lastexpressiontype IsNot Nothing Then
+            result = ParseBooleanFactor(lastexpressiontype)
+        Else
+            If IsNotOperator(LookAhead) Then
+                ScanNotOperator()
+
+                If TokenLength = 0 Then
+                    result = CreateError(1, _
+                        "NOT")
+                Else
+                    result = ParseNotOperator()
+                End If
+            Else
+                result = ParseBooleanFactor()
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseAndOperator() _
+            As ParseStatus
+
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+
+        result = ParseNotOperation()
+
+        If result.Code = 0 Then
+            m_Gen.EmitBitwiseAnd()
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseAndOperation( _
+                        Optional lastexpressiontype As Type = Nothing _
+        ) As ParseStatus
+
+        Dim result As ParseStatus
+
+        result = ParseNotOperation(lastexpressiontype)
+
+        Do While result.Code = 0 And _
+            IsAndOperator(LookAhead)
+
+            ScanAndOperator()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, _
+                    "AND")
+            Else
+                result = ParseAndOperator()
+                SkipWhiteSpace()
+            End If
+        Loop
+
+        Return result
+    End Function
+
+
+    Private Function ParseOrOperator() _
+            As ParseStatus
+
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+
+        result = ParseAndOperation()
+
+        If result.Code = 0 Then
+            m_Gen.EmitBitwiseOr()
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseOrOperation( _
+                        Optional lastexpressiontype As Type = Nothing _
+        ) As ParseStatus
+
+        Dim result As ParseStatus
+
+        result = ParseAndOperation(lastexpressiontype)
+
+        Do While result.Code = 0 And _
+            IsOrOperator(LookAhead)
+
+            ScanOrOperator()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, _
+                    "OR")
+            Else
+                result = ParseOrOperator()
+                SkipWhiteSpace()
+            End If
+        Loop
+
+        Return result
+    End Function
+
     Private Function ParseBooleanExpression( _
                         Optional lastexpressiontype As Type = Nothing _
         ) As ParseStatus
 
         Dim result As ParseStatus
 
-        result = ParseCondition(lastexpressiontype)
-        
+        result = ParseOrOperation(lastexpressiontype)
+
         If result.Code = 0 Then
             m_LastTypeProcessed = _
                 Type.GetType( _
                 "System.Boolean")
         End If
-        
+
         Return result
     End Function
 
@@ -612,6 +828,8 @@ End Function
             result = ParseStringExpression()
         ElseIf IsNumeric(LookAhead) Then
             result = ParseNumericExpression()
+        ElseIf IsNotOperator(LookAhead) Then
+            result = ParseBooleanExpression()
         ElseIf LookAhead.Equals("("c) Then
             ' For now, assuming only numeric expressions can use ()
             result = ParseNumericExpression()
@@ -620,13 +838,15 @@ End Function
         End If
 
         If result.Code = 0 Then
-            ' If a relational operator follows the expression just parsed
-            ' we are in the middle of a Boolean expression. Our work is
-            ' not yet done.
-            If IsRelOperator(LookAhead) Then
-                ' Parse a boolean expression, letting it know that the
-                ' first part has already been parsed.
-                result = ParseBooleanExpression(m_LastTypeProcessed)
+            If expressiontype Is Nothing Then
+                ' If a relational operator follows the expression just parsed
+                ' we are in the middle of a Boolean expression. Our work is
+                ' not yet done.
+                If IsRelOperator(LookAhead) Then
+                    ' Parse a boolean expression, letting it know that the
+                    ' first part has already been parsed.
+                    result = ParseBooleanExpression(m_LastTypeProcessed)
+                End If
             End If
         End If
 
