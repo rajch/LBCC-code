@@ -1,8 +1,11 @@
+Option Strict On
+Option Explicit On
+
 Imports System
 Imports System.IO
 Imports System.Text
 
-Public Class Parser
+Public Partial Class Parser
 
 #Region "Fields"
     Private m_InputStream As TextReader
@@ -106,6 +109,20 @@ Public Class Parser
 
     Private Function IsOrOperator(ByVal c As Char) As Boolean
         Return "oOrR|".IndexOf(c) > -1
+    End Function
+
+    Private Function IsNameCharacter(ByVal c As Char) As Boolean
+        Dim result As Boolean = False
+        If Char.IsDigit(c) AndAlso _
+                    Tokenlength > 0 Then
+            ' Digits allowed after start of name
+            result = True
+        ElseIf c.Equals("_"c) Then
+            result = True
+        ElseIf Char.IsLetter(c) Then
+            result = True
+        End If
+        Return result
     End Function
 #End Region
 
@@ -310,40 +327,36 @@ Public Class Parser
                 m_CurrentTokenBldr = New StringBuilder
         End Select
     End Sub
+
+    Public Sub ScanName()
+        m_CurrentTokenBldr = New StringBuilder
+        Do While IsNameCharacter(LookAhead)
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+            If EndOfLine Then
+                Exit Do
+            End If
+        Loop
+    End Sub
 #End Region
 
 #Region "Parser"
-Private Function ParseLine() As ParseStatus
-    Dim result As ParseStatus
-    
-    SkipWhiteSpace()
-    
-    m_LastTypeProcessed = Nothing
-    
-    result = ParseExpression()
-    
-    If result.code = 0 Then
+    Private Function ParseLine() As ParseStatus
+        Dim result As ParseStatus
+        
+        SkipWhiteSpace()
+        
+        m_LastTypeProcessed = Nothing
+        
         If Not EndOfLine() Then
-            result = CreateError(1, "end of statement")
+            ScanName()
+            result = ParseCommand()
         Else
-            If m_LastTypeProcessed.Equals( _
-                                    Type.GetType("System.Int32") _
-                                ) Then
-                m_Gen.EmitWriteLine()
-            ElseIf m_LastTypeProcessed.Equals( _
-                                        Type.GetType("System.String") _
-                                ) Then
-                m_Gen.EmitWriteLineString()
-            ElseIf m_LastTypeProcessed.Equals( _
-                                        Type.GetType("System.Boolean") _
-                                ) Then
-                m_Gen.EmitWriteLineBoolean()
-            End If
+            result = CreateError(0, "Ok")
         End If
-    End If
-    
-    Return result
-End Function
+
+        Return result
+    End Function
 
     Private Function ParseNumber() As ParseStatus
         Dim result As ParseStatus
@@ -852,6 +865,27 @@ End Function
 
         Return result
     End Function
+
+    Private Function ParseCommand() As ParseStatus
+        Dim result As ParseStatus
+        
+        If TokenLength = 0 Then
+            result = CreateError(1, "a valid command")
+        Else
+            Dim commandname As String = CurrentToken.ToLower()
+
+            If Not IsValidCommand(commandname) Then
+                result = CreateError(1, "a valid command")
+            Else
+                Dim parser as CommandParser = _
+                        m_commandTable(commandname)
+
+                result = parser()
+            End If
+        End If
+
+        Return result
+    End Function
 #End Region
 
     Public Function Parse() As ParseStatus
@@ -872,5 +906,7 @@ End Function
 
         m_InputStream = newStream
         m_Gen = newGen
+
+        InitCommands()
     End Sub
 End Class
