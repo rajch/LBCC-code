@@ -1,0 +1,9 @@
+REM This is a simple program
+
+Comment
+  Print "Hello, World"
+  Comment
+    Print 2+4/2-1
+    Print 2=2 And 4=1
+  End Comment
+End Comment

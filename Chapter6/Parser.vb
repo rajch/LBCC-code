@@ -27,7 +27,10 @@ Public Partial Class Parser
     Private m_EmptyStringFlag As Boolean = False
 
     ' The type of the last processed expression
-    Private m_LastTypeProcessed As Type 
+    Private m_LastTypeProcessed As Type
+
+    ' Block stack
+    Private m_BlockStack As New BlockStack
 #End Region
 
 #Region "Helper Functions"
@@ -40,13 +43,17 @@ Public Partial Class Parser
         Dim message As String
 
         Select Case errorcode
-            Case 0
+            Case -1 ' Block finished
+                message = ""
+            Case 0  ' All good
                 message = "Ok."
-            Case 1
+            Case 1  ' Expected something
                 message = String.Format( _
                             "Expected {0}", _
                             errorDescription _
                 )
+            Case 2  ' Not in block
+                message = errorDescription
         End Select
 
         result = New ParseStatus(errorcode, _
@@ -872,30 +879,77 @@ Public Partial Class Parser
         If TokenLength = 0 Then
             result = CreateError(1, "a valid command")
         Else
-            Dim commandname As String = CurrentToken.ToLower()
+            Dim commandname As String = _
+                    CurrentToken.ToLowerInvariant()
 
-            If Not IsValidCommand(commandname) Then
-                result = CreateError(1, "a valid command")
+            If commandname = "comment" Then
+                result = ParseCommentCommand()
+            ElseIf commandname = "end"
+                result = ParseEndCommand()
+            ElseIf m_inCommentBlock Then
+                ' Ignore rest of line
+                m_CharPos = m_LineLength
+                ' All is good in a comment block
+                result = CreateError(0, "Ok")
             Else
-                Dim parser as CommandParser = _
-                        m_commandTable(commandname)
+                If IsValidCommand(commandname) Then
+                    Dim parser as CommandParser = _
+                            m_commandTable(commandname)
 
-                result = parser()
+                    result = parser()
+                Else
+                    result = CreateError(1, "a valid command")
+                End If
             End If
         End If
 
         Return result
     End Function
-#End Region
 
-    Public Function Parse() As ParseStatus
+    Private Function ParseBlock(ByVal newblock As Block) _
+                            As ParseStatus
+
         Dim result As ParseStatus
+        m_BlockStack.Push(newblock)
+
         Do While ScanLine()
             result = ParseLine()
             If result.Code <> 0 Then
                 Exit Do
             End If
         Loop
+
+        ' Block will end when the result code returned
+        ' is -1
+        If result.Code = -1 Then
+            result = CreateError(0, "Ok")
+            m_BlockStack.Pop()
+        End If
+        
+        Return result
+    End Function
+
+#End Region
+
+    Public Function Parse() As ParseStatus
+        Dim result As ParseStatus
+
+        Do While ScanLine()
+            result = ParseLine()
+            If result.Code <> 0 Then
+                Exit Do
+            End If
+        Loop
+
+        If result.Code = 0 AndAlso _
+                    (Not m_BlockStack.IsEmpty()) Then
+
+            result = CreateError(1, _
+                            "end " & _
+                            m_BlockStack.CurrentBlock.BlockType _
+            )
+        End If
+
         Return result
     End Function
 
