@@ -977,6 +977,8 @@ Public Partial Class Parser
                             As ParseStatus
 
         Dim result As ParseStatus
+        result = CreateError(0, "Ok.")
+        
         m_BlockStack.Push(newblock)
 
         Do While ScanLine()
