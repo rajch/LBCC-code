@@ -1104,6 +1104,7 @@ Public Partial Class Parser
 
     Public Function Parse() As ParseStatus
         Dim result As ParseStatus
+        result = CreateError(0, "Ok.")
 
         Do While ScanLine()
             result = ParseLine()
