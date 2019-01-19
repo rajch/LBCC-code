@@ -31,6 +31,9 @@ Public Partial Class Parser
 
     ' Block stack
     Private m_BlockStack As New BlockStack
+
+    ' Symbol table
+    Private m_SymbolTable As New SymbolTable
 #End Region
 
 #Region "Helper Functions"
@@ -42,6 +45,11 @@ Public Partial Class Parser
         Dim result As ParseStatus
         Dim message As String
 
+        Dim errorpos As Integer
+        ' Most errors happen
+        ' at the scan position
+        errorpos = m_CharPos + 1
+
         Select Case errorcode
             Case -1 ' Block finished
                 message = ""
@@ -52,13 +60,38 @@ Public Partial Class Parser
                             "Expected {0}", _
                             errorDescription _
                 )
+
             Case 2  ' Not in block
                 message = errorDescription
+
+                ' Not in block error happens
+                ' after End command has been
+                ' scanned
+                errorpos = errorpos - TokenLength
+            Case 3  ' Variable already declared
+                message = String.Format( _
+                            "Cannot redeclare variable '{0}'.", _
+                            errorDescription
+                )
+
+                ' Error happens after scanning
+                ' variable name
+                errorpos = errorpos - TokenLength
+            Case 4  ' Variable not declared
+                message = String.Format( _
+                            "Variable '{0}' not declared.", _
+                            errorDescription
+                )
+                ' Error happens after scanning
+                ' variable name
+                errorpos = errorpos - TokenLength
+            Case Else
+                message = "Unknown error."
         End Select
 
         result = New ParseStatus(errorcode, _
                     message, _
-                    m_CharPos + 1, _
+                    errorpos, _
                     m_linePos)
 
 
@@ -130,6 +163,10 @@ Public Partial Class Parser
             result = True
         End If
         Return result
+    End Function
+
+    Private Function IsAssignmentCharacter(Byval c As Char) As Boolean
+        Return ":=".IndexOf(c) > -1
     End Function
 #End Region
 
@@ -335,7 +372,7 @@ Public Partial Class Parser
         End Select
     End Sub
 
-    Public Sub ScanName()
+    Private Sub ScanName()
         m_CurrentTokenBldr = New StringBuilder
         Do While IsNameCharacter(LookAhead)
             m_CurrentTokenBldr.Append(LookAhead)
@@ -344,6 +381,21 @@ Public Partial Class Parser
                 Exit Do
             End If
         Loop
+    End Sub
+
+    Private Sub ScanAssignmentOperator()
+        m_CurrentTokenBldr = New StringBuilder
+        Do While IsAssignmentCharacter(LookAhead)
+            m_CurrentTokenBldr.Append(LookAhead)
+            m_CharPos += 1
+        Loop
+
+        Select Case CurrentToken
+            Case "=", ":="
+                ' Valid Assignment operator
+            Case Else
+                m_CurrentTokenBldr = New StringBuilder
+        End Select
     End Sub
 #End Region
 
@@ -355,11 +407,26 @@ Public Partial Class Parser
         
         m_LastTypeProcessed = Nothing
         
-        If Not EndOfLine() Then
-            ScanName()
-            result = ParseCommand()
-        Else
+        If EndOfLine() Then
+            ' An empty line is valid
             result = CreateError(0, "Ok")
+        Else
+            ScanName()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, "a statement.")
+            Else
+                Dim name As String
+                name = CurrentToken
+
+                If IsValidCommand(name) Then
+                    result = ParseCommand()
+                ElseIf IsValidType(name) Then
+                    result = ParseTypeFirstDeclaration()
+                Else
+                    result = ParseAssignmentStatement()
+                End If
+            End If
         End If
 
         Return result
@@ -929,6 +996,108 @@ Public Partial Class Parser
         Return result
     End Function
 
+    Private Function ParseTypeFirstDeclaration() _
+                        As ParseStatus
+        Dim result As ParseStatus
+
+        Dim typename As String
+        typename = CurrentToken
+
+        If IsValidType(typename) Then
+            ' Read a variable name
+            SkipWhiteSpace()
+            ScanName()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, "a variable name.")
+            Else
+                Dim varname As String
+                varname = CurrentToken
+
+                If m_SymbolTable.Exists(varname) Then
+                    result = CreateError(3, varname)
+                Else
+                    Dim symbol As New Symbol( _
+                                        varname, _
+                                        GetTypeForName(typename)
+                    )
+
+                    symbol.Handle = m_Gen.DeclareVariable(
+                                        symbol.Name,
+                                        symbol.Type
+                                    )
+
+                    m_SymbolTable.Add(symbol)
+
+                    SkipWhiteSpace()
+
+                    If Not EndOfLine Then
+                        result = CreateError(1, "end of statement.")
+                    Else
+                        result = CreateError(0, "Ok")
+                    End If
+                End If
+            End If
+        Else
+            result = CreateError(1, "a valid type.")
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseAssignment(variable As Symbol) _
+                        As ParseStatus
+
+        Dim result As ParseStatus
+     
+        SkipWhiteSpace()
+        
+        Select Case variable.Type.ToString()
+            Case "System.Int32"
+                result = ParseNumericExpression()
+            Case "System.String"
+                result = ParseStringExpression()
+            Case "System.Boolean"
+                result = ParseBooleanExpression()
+            Case Else
+                result = CreateError(1, " a valid type.")
+        End Select 
+ 
+        If result.Code = 0 Then
+            ' Generate assignment code
+            m_Gen.EmitStoreInLocal(variable.Handle)
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseAssignmentStatement() _
+                        As ParseStatus
+
+        Dim result As ParseStatus
+        
+        Dim varname As String
+        varname = CurrentToken
+
+        If m_SymbolTable.Exists(varname) Then
+            ' Read assignment operator
+            SkipWhiteSpace()
+            ScanAssignmentOperator()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, "= or :=")
+            Else
+                Dim variable As Symbol
+                variable = m_SymbolTable.Fetch(varname)
+
+                result = ParseAssignment(variable)
+            End If
+        Else
+            result = CreateError(4, varname)
+        End If
+
+        Return result
+    End Function
 #End Region
 
     Public Function Parse() As ParseStatus
@@ -961,6 +1130,7 @@ Public Partial Class Parser
         m_InputStream = newStream
         m_Gen = newGen
 
+        InitTypes()
         InitCommands()
     End Sub
 End Class

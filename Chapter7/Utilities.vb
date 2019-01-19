@@ -132,3 +132,55 @@ Public Class BlockStack
         Return result
     End Function
 End Class
+
+Public Class Symbol
+    Private m_Name As String = ""
+    Private m_Type As Type = Nothing
+    Private m_CodeGenHandle As Integer = -1 
+ 
+    Public Sub New(newname as String, newtype As Type)
+        m_Name = newname
+        m_Type = newtype
+    End Sub
+
+    Public ReadOnly Property Name() As String
+        Get
+            Return m_Name
+        End Get        
+    End Property 
+ 
+    Public ReadOnly Property Type() As Type
+        Get
+            Return m_Type
+        End Get
+    End Property 
+ 
+    Public Property Handle() As Integer
+        Get
+            Return m_CodeGenHandle
+        End Get
+        
+        Set(ByVal Value As Integer)
+            m_CodeGenHandle = Value
+        End Set
+    End Property
+End Class
+
+Public Class SymbolTable
+    Private m_symbolTable As New Dictionary(Of String, Symbol)
+
+    Public Sub Add(symbol As Symbol)
+        m_SymbolTable.Add( _
+                        symbol.Name.ToLowerInvariant(), _
+                        symbol
+        )
+    End Sub
+
+    Public Function Fetch(name as String) As Symbol
+        Return m_SymbolTable(name.ToLowerInvariant())
+    End Function
+
+    Public Function Exists(name as string) As Boolean
+        Return m_SymbolTable.ContainsKey(name.ToLowerInvariant())
+    End Function
+End Class

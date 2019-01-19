@@ -8,7 +8,8 @@ Public Partial Class Parser
 #Region "Fields"
     Private Delegate Function CommandParser() As ParseStatus
     Private m_commandTable As Dictionary(Of String, CommandParser)
-    Private m_inCommentBlock As Boolean = False
+    Private m_inCommentBlock As Boolean = False 
+    Private m_typeTable As Dictionary(Of String, Type)
 #End Region
 
 #Region "Helper Functions"
@@ -34,6 +35,29 @@ Public Partial Class Parser
         AddCommand("rem", AddressOf ParseRemCommand)
         AddCommand("comment", AddressOf ParseCommentCommand)
         AddCommand("end", AddressOf ParseEndCommand)
+        AddCommand("dim", AddressOf ParseDimCommand)
+        AddCommand("var", AddressOf ParseDimCommand)
+    End Sub
+
+    Private Sub AddType(typeName As String, type As Type)
+        m_typeTable.Add(typeName.ToLowerInvariant(), type)
+    End Sub
+
+    Private Function IsValidType(typeName As String) As Boolean
+        Return m_typeTable.ContainsKey(typeName.ToLowerInvariant())
+    End Function
+
+    Private Function GetTypeForName(typeName as String) As Type
+        Return m_typeTable(typeName.ToLowerInvariant())
+    End Function
+
+    Private Sub InitTypes()
+        m_typeTable = new Dictionary(Of String, Type)
+
+        ' Add types here
+        AddType("integer", GetType(System.Int32))
+        AddType("string", GetType(System.String))
+        AddType("boolean", GetType(System.Boolean))
     End Sub
 #End Region
 
@@ -123,6 +147,67 @@ Public Partial Class Parser
             End If
         Else
             result = CreateError(2, "Not inside a block")
+        End If
+
+        Return result
+    End Function
+
+    Public Function ParseDimCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        ' Read a variable name
+        SkipWhiteSpace()
+        ScanName()
+
+        If TokenLength = 0 Then
+            result = CreateError(1, "a variable name.")
+        Else
+            Dim varname As String
+            varname = CurrentToken
+
+            If m_SymbolTable.Exists(varname) Then
+                ' Variable name already declared
+                result = CreateError(3, CurrentToken)
+            Else
+                ' Read either "as" or type
+                SkipWhiteSpace()
+                ScanName()
+
+                ' Check and ignore "As"
+                If CurrentToken.ToLowerInvariant() = "as" Then
+                    ' Read type
+                    SkipWhiteSpace()
+                    ScanName()
+                End If
+
+                Dim typename As String
+                typename = CurrentToken
+
+                If TokenLength = 0 OrElse _
+                        Not IsValidType(typename) Then
+                    result = CreateError(1, "a valid type.")
+                Else
+                    Dim symbol As New Symbol( _
+                                        varname,
+                                        GetTypeForName(typename)
+                    )
+
+                    symbol.Handle = m_Gen.DeclareVariable( _
+                                                symbol.Name, _
+                                                symbol.Type
+                                    )
+
+                    m_SymbolTable.Add(symbol)
+
+                    SkipWhiteSpace()
+
+                    If Not EndOfLine Then
+                        result = CreateError(1, "end of statement.")
+                    Else
+                        result = CreateError(0, "Ok")
+                    End If
+                End If
+            End If
         End If
 
         Return result

@@ -5,6 +5,7 @@ Option Explicit On
 Imports System
 Imports System.Reflection
 Imports System.Reflection.Emit
+Imports System.Collections.Generic
 
 
 Public Class CodeGen
@@ -14,6 +15,8 @@ Public Class CodeGen
 	Private m_producedtype As TypeBuilder
 	Private m_producedmethod As MethodBuilder
 	Private m_SaveToFile As String
+	Private m_LocalVariables As _
+				New Dictionary(Of Integer, LocalBuilder)
 
 	Public Sub EmitNumber(ByVal num As Integer)
 		m_ILGen.Emit(OpCodes.Ldc_I4, num)
@@ -251,5 +254,40 @@ Public Class CodeGen
 			Opcodes.Call, _
 			concatmethod
 		)
+	End Sub
+
+	Public Function DeclareVariable( _
+						Name As String, _
+						VariableType As System.Type _
+					) As Integer 
+	
+		Dim lb As LocalBuilder 
+
+		lb = m_ILGen.DeclareLocal(VariableType)
+		m_LocalVariables.Add(lb.LocalIndex, lb)
+
+		Return lb.LocalIndex
+	End Function
+
+	Public Sub EmitStoreInLocal( _
+				Index As Integer _
+			)
+		
+		Dim lb As LocalBuilder 
+	
+		lb = m_LocalVariables(Index)
+		m_ILGen.Emit(OpCodes.Stloc, lb)
+
+	End Sub
+
+	Public Sub EmitLoadLocal( _
+				Index As Integer _
+			)
+		
+		Dim lb As LocalBuilder 
+	
+		lb = m_LocalVariables(Index)
+		m_ILGen.Emit(OpCodes.Ldloc, lb)
+
 	End Sub
 End Class

@@ -1,0 +1,6 @@
+Dim x As Integer
+x = 2*(3+56) /4
+String y
+y := "Hello world"
+Var z As Boolean
+Z := 1=2
