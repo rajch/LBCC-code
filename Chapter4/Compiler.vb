@@ -53,5 +53,7 @@ Module Compiler
                 Console.WriteLine("Done.")
             End If
         End With
+        
+        Return status.Code
     End Function
 End Module
