@@ -38,6 +38,8 @@ Public Class Parser
                             "Expected {0}", _
                             errorDescription _
                 )
+            Case Else
+                message = "Unknown error."
         End Select
 
         result = New ParseStatus(errorcode, _
