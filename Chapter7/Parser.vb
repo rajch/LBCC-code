@@ -176,6 +176,10 @@ Public Partial Class Parser
     Private Function IsAssignmentCharacter(Byval c As Char) As Boolean
         Return ":=".IndexOf(c) > -1
     End Function
+
+    Private Function IsNameStartCharacter(Byval c As Char) As Boolean
+        Return c.Equals("_"c) OrElse Char.IsLetter(c)
+    End Function
 #End Region
 
 #Region "Scanner"
@@ -477,6 +481,8 @@ Public Partial Class Parser
                     SkipCharacter()
                 End If
             End If
+        ElseIf IsNameStartCharacter(LookAhead) Then
+            result = ParseVariable(GetType(System.Int32))
         Else
             result = ParseNumber()
         End If
@@ -1105,6 +1111,40 @@ Public Partial Class Parser
         Else
             result = CreateError(4, varname)
         End If
+
+        Return result
+    End Function
+
+    Private Function ParseVariable(type As Type) _
+                        As ParseStatus
+
+        Dim result As ParseStatus
+ 
+        ' Try to read variable name
+        ScanName()
+        
+        If TokenLength = 0 Then
+            result = CreateError(1, "a variable.")
+        Else
+            Dim varname As String
+            varname = CurrentToken
+
+            If Not m_SymbolTable.Exists(varname) Then
+                result = CreateError(4, varname)
+            Else
+                Dim variable As Symbol
+                variable = m_SymbolTable.Fetch(varname)
+
+                If Not variable.Type.Equals(type) Then
+                    result = CreateError(5, variable.Name)
+                Else
+                    ' Emit the variable
+                    m_Gen.EmitLoadLocal(variable.Handle)
+
+                    result = CreateError(0, "Ok.")
+                End If
+            End If
+        End If 
 
         Return result
     End Function
