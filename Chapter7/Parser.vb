@@ -593,16 +593,42 @@ Public Partial Class Parser
         Return result
     End Function
 
+    Private Function ParseStringFactor() As ParseStatus
+        Dim result As ParseStatus
+
+        If LookAhead.Equals(""""c) Then
+            result = ParseString()
+        ElseIf IsNameStartCharacter(LookAhead) Then
+            result = ParseVariable(GetType(System.String))
+        ElseIf LookAhead.Equals("("c) Then
+            SkipCharacter()
+
+            result = ParseStringExpression()
+
+            If result.Code = 0 Then
+                If Not LookAhead.Equals(")"c) Then
+                    result = CreateError(1, ")")
+                Else
+                    SkipCharacter()
+                End If
+            End If
+        Else
+            result = CreateError(1, "a string.")
+        End If
+
+        Return result
+    End Function
+
     Private Function ParseConcatOperator() As ParseStatus
         Dim result As ParseStatus
         Dim currentoperator As String = CurrentToken
         
         SkipWhiteSpace()
         
-        result = ParseString()
+        result = ParseStringFactor()
         
         If result.code = 0 Then
-            m_Gen.EmitConcat
+            m_Gen.EmitConcat()
         End If
         
         Return result
@@ -612,7 +638,7 @@ Public Partial Class Parser
                 
         Dim result As ParseStatus
         
-        result = ParseString()
+        result = ParseStringFactor()
         
         Do While result.code=0 _
             AndAlso _
@@ -1140,7 +1166,8 @@ Public Partial Class Parser
                 Else
                     ' Emit the variable
                     m_Gen.EmitLoadLocal(variable.Handle)
-
+                    SkipWhiteSpace()
+                    
                     result = CreateError(0, "Ok.")
                 End If
             End If

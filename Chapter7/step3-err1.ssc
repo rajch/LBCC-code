@@ -1,0 +1,5 @@
+Dim myname As String 
+myname = "Paula"
+String greet
+greet := myname & ", you brillant person."
+print greet + " Hello."
