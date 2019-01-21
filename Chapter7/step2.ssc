@@ -1,0 +1,5 @@
+Dim i As Integer
+Integer j
+i = 39
+j := i + 2
+Print 3+j
