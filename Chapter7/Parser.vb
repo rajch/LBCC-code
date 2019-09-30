@@ -409,6 +409,13 @@ Public Partial Class Parser
                 m_CurrentTokenBldr = New StringBuilder
         End Select
     End Sub
+
+    Private Sub Backtrack()
+        If TokenLength > 0 Then
+            m_CharPos -= TokenLength
+            m_CurrentTokenBldr = New StringBuilder()
+        End If
+    End Sub
 #End Region
 
 #Region "Parser"
@@ -955,6 +962,8 @@ Public Partial Class Parser
             result = ParseStringExpression()
         ElseIf IsNumeric(LookAhead) Then
             result = ParseNumericExpression()
+        ElseIf IsNameStartCharacter(LookAhead) Then
+            result = ParseInitialName()
         ElseIf IsNotOperator(LookAhead) Then
             result = ParseBooleanExpression()
         ElseIf LookAhead.Equals("("c) Then
@@ -1172,6 +1181,45 @@ Public Partial Class Parser
                 End If
             End If
         End If 
+
+        Return result
+    End Function
+
+    Private Function ParseInitialName() As ParseStatus
+        Dim result As ParseStatus
+
+        ScanName()
+
+        Dim varname As String
+        varname = CurrentToken 
+
+        If CurrentToken.ToLowerInvariant() = "not" Then
+            ' This is a boolean. Backtrack and call
+            ' boolean parser
+            Backtrack()
+            result = ParseBooleanExpression()
+        Else
+            If Not m_SymbolTable.Exists(varname) Then
+                result = CreateError(4, varname)
+            Else
+                Dim variable As Symbol
+                variable = m_SymbolTable.Fetch(varname)
+
+                Select Case variable.Type.ToString()
+                    Case "System.Int32"
+                        ' Backtrack, and call numeric parser
+                        Backtrack()
+                        result = ParseNumericExpression()
+                    Case "System.String"
+                        ' Backtrack, and call string parser
+                        Backtrack()
+                        result = ParseStringExpression()
+                    Case Else
+                        result = CreateError(1, " an Integer or String variable.")
+                End Select
+
+            End If
+        End If
 
         Return result
     End Function

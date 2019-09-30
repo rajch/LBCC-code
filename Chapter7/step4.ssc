@@ -1,0 +1,19 @@
+integer x
+x = 12
+print x+2
+integer y
+y = x * 2
+print y
+print y<x
+print y>x
+string z
+z := "Raj"
+print z
+print z & " Chaudhuri"
+print z=="Raj"
+print z>="Raj"
+Dim myname As String 
+myname = "Paula"
+String greet
+greet := myname & ", you brillant person."
+print greet + " Hello."
