@@ -786,12 +786,10 @@ Public Partial Class Parser
             If TokenLength = 0 Then
                 ' If the last type processed was a Boolean,
                 ' a relational operator is not required
-                If Not lastexpressiontype Is Nothing Then 
-                    If Not lastexpressiontype.Equals( _
+                If Not m_LastTypeProcessed.Equals( _
                                                 GetType(Boolean) _ 
                                             ) Then
-                        result = CreateError(1, "a relational operator.")
-                    End If
+                    result = CreateError(1, "a relational operator.")
                 End If
             Else
                 result = ParseRelOperator()
