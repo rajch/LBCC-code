@@ -1,0 +1,4 @@
+Integer n
+n:=42
+Boolean m
+m = n=42

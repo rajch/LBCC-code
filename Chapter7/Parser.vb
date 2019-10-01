@@ -147,8 +147,26 @@ Public Partial Class Parser
         Return "=><!".IndexOf(c)>-1
     End Function
 
-    Private Function IsNotOperator(ByVal c As Char) As Boolean
+    Private Function IsNotOperatorSymbol(ByVal c As Char) As Boolean
         Return "nNoOtT!".IndexOf(c) > -1
+    End Function
+
+    Private Function IsNotOperator(Byval c As Char) As Boolean
+        Dim result As Boolean = False
+
+        If c = "!"c Then
+            result = True
+        ElseIf Char.ToLowerInvariant(c) = "n"c AndAlso _
+            m_LineLength >= m_CharPos+2 Then
+
+            Dim peektoken As String
+            peektoken = m_ThisLine.Substring(m_CharPos,3).ToLowerInvariant()
+            If peektoken = "not" Then
+                result = True
+            End If
+        End If
+
+        Return result
     End Function
 
     Private Function IsAndOperator(ByVal c As Char) As Boolean
@@ -339,7 +357,7 @@ Public Partial Class Parser
     Private Sub ScanNotOperator()
         m_CurrentTokenBldr = New StringBuilder
 
-        Do While IsNotOperator(LookAhead)
+        Do While IsNotOperatorSymbol(LookAhead)
             m_CurrentTokenBldr.Append(LookAhead)
             m_CharPos += 1
         Loop
