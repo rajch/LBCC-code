@@ -707,7 +707,16 @@ Public Partial Class Parser
                 Case "<>", "!=", "!=="
                     m_Gen.EmitStringInequality()
             End Select
+        ElseIf conditionType.Equals( _
+                Type.GetType("System.Boolean")
+            ) Then
 
+            Select Case reloperator
+                Case "=", "==", "==="
+                    m_Gen.EmitEqualityComparison()
+                Case "<>", "!=", "!=="
+                    m_Gen.EmitInEqualityComparison()
+            End Select
         End If
     End Sub
 
@@ -733,6 +742,18 @@ Public Partial Class Parser
             ) Then
 
             result = ParseStringExpression()
+        ElseIf conditiontype.Equals( _
+                Type.GetType("System.Boolean") _
+            ) Then
+            ' Boolean conditions support only equality or
+            ' inequality comparisons
+            Select Case reloperator
+                Case "=","==","===", "<>", "!=", "!=="
+                    result = ParseBooleanExpression()
+                Case Else
+                    result = CreateError(1, "and = or <> operator")
+            End Select
+            
         Else
             result = CreateError(1, "an expression of type " & _
                             conditiontype.ToString())
@@ -763,7 +784,15 @@ Public Partial Class Parser
             ScanRelOperator()
 
             If TokenLength = 0 Then
-                result = CreateError(1, "a relational operator.")
+                ' If the last type processed was a Boolean,
+                ' a relational operator is not required
+                If Not lastexpressiontype Is Nothing Then 
+                    If Not lastexpressiontype.Equals( _
+                                                GetType(Boolean) _ 
+                                            ) Then
+                        result = CreateError(1, "a relational operator.")
+                    End If
+                End If
             Else
                 result = ParseRelOperator()
                 SkipWhiteSpace()
@@ -1214,6 +1243,14 @@ Public Partial Class Parser
                         ' Backtrack, and call string parser
                         Backtrack()
                         result = ParseStringExpression()
+                    Case "System.Boolean"
+                        ' Backtrack, parse variable because boolean factor
+                        ' can't, then continue as a boolean expression
+                        Backtrack()
+                        result = ParseVariable(GetType(Boolean))
+                        If result.Code = 0 Then
+                            result = ParseBooleanExpression(GetType(Boolean))
+                        End If
                     Case Else
                         result = CreateError(1, " an Integer or String variable.")
                 End Select

@@ -1,0 +1,18 @@
+var xx as boolean
+var yy as boolean
+xx = 1=1
+yy = 1=2
+print "xx"
+print xx
+print "yy"
+print yy
+print "xx = yy"
+print xx = yy
+print "xx = xx"
+print xx = xx
+print "xx and yy"
+print xx and yy
+print "xx or yy"
+print xx or yy
+print "not xx"
+print not xx
