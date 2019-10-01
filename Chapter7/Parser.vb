@@ -1127,10 +1127,11 @@ Public Partial Class Parser
 
                     SkipWhiteSpace()
 
-                    If Not EndOfLine Then
-                        result = CreateError(1, "end of statement.")
-                    Else
-                        result = CreateError(0, "Ok")
+                    result = ParseDeclarationAssignment(symbol)
+                    If result.Code = 0 Then
+                        If Not EndOfLine Then
+                            result = CreateError(1, "end of statement.")
+                        End If
                     End If
                 End If
             End If
@@ -1272,6 +1273,25 @@ Public Partial Class Parser
                 End Select
 
             End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseDeclarationAssignment(ByVal variable As Symbol) _
+                                                            As ParseStatus
+        Dim result As ParseStatus
+        
+        If IsAssignmentCharacter(LookAhead) Then
+            ScanAssignmentOperator()
+
+            If TokenLength = 0 Then
+                result = CreateError(1, "= or :=")
+            Else
+                result = ParseAssignment(variable)
+            End If
+        Else
+            result = CreateError(0, "Ok")
         End If
 
         Return result

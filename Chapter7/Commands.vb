@@ -201,10 +201,12 @@ Public Partial Class Parser
 
                     SkipWhiteSpace()
 
-                    If Not EndOfLine Then
-                        result = CreateError(1, "end of statement.")
-                    Else
-                        result = CreateError(0, "Ok")
+                    result = ParseDeclarationAssignment(symbol)
+
+                    If result.Code = 0 Then
+                        If Not EndOfLine Then
+                            result = CreateError(1, "end of statement.")
+                        End If
                     End If
                 End If
             End If

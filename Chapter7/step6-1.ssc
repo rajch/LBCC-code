@@ -1,0 +1,8 @@
+Boolean truth
+truth := 2+2=4
+Print truth
+Print not truth
+Print not not truth
+Print not not not truth
+truth := not not truth
+Print truth and not not truth

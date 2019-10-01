@@ -1,0 +1,8 @@
+integer y:=2
+dim x as string = "Hello"
+dim a as integer = y+2
+String b = "World"
+Dim greetfirst As String := x & " "
+String fullgreeting = greetfirst + b
+Print fullgreeting
+Print a
