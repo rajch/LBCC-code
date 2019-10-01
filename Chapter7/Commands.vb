@@ -58,6 +58,8 @@ Public Partial Class Parser
         AddType("integer", GetType(System.Int32))
         AddType("string", GetType(System.String))
         AddType("boolean", GetType(System.Boolean))
+        AddType("int", GetType(System.Int32))
+        AddType("bool", GetType(System.Boolean))
     End Sub
 #End Region
 

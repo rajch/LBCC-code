@@ -1,0 +1,8 @@
+int i = 40
+Dim j As Integer := i + 1
+bool doWeKnowWhatIsLife = j<42
+Print i
+Print j
+Print doWeKnowWhatIsLife
+Dim areWeHappy As Boolean = 2=2
+Print doWeKnowWhatIsLife AND areWeHappy
