@@ -40,6 +40,7 @@ Public Partial Class Parser
         AddCommand("var",       AddressOf ParseDimCommand)
         AddCommand("if",        AddressOf ParseIfCommand)
         AddCommand("else",      AddressOf ParseElseCommand)
+        AddCommand("elseif",    AddressOf ParseElseIfCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -270,6 +271,16 @@ Public Partial Class Parser
                 ' the endpoint label, and restore saved else
                 ' flag for nesting
                 If result.Code = 0  Then
+
+                    ' If there is a dangling StartPoint, emit
+                    ' it first
+                    If ifblock.StartPoint<>ifblock.EndPoint _
+                            AndAlso _
+                        Not m_ElseFlag Then
+
+                        m_Gen.EmitLabel(ifblock.StartPoint)
+                    End If
+
                     m_Gen.EmitLabel(ifblock.EndPoint)
                     m_ElseFlag = oldelseflag
                 End If
@@ -324,6 +335,77 @@ Public Partial Class Parser
             End If
         End If
         
+        Return result
+    End Function
+
+    Private Function ParseElseIfCommand As ParseStatus
+        Dim result As ParseStatus
+
+        Dim currBlock As Block = m_BlockStack.CurrentBlock
+        
+        ' The ElseIf command can only be in an If block, and the
+        ' Else flag should not be set
+        If currBlock Is Nothing _
+                OrElse _
+            currBlock.BlockType <> "if" _
+                OrElse _
+            m_ElseFlag Then
+
+            result = CreateError(6, "ElseIf")
+        Else
+        
+            ' If the endpoint is the same as the startpoint, this
+            ' is the first ElseIf. Generate new endpoint. This 
+            ' will mark the end of the If block.
+            If currBlock.EndPoint = currBlock.StartPoint Then
+                currBlock.EndPoint = m_Gen.DeclareLabel()
+            End If
+
+            ' Emit jump to the endpoint, because the ElseIf condition 
+            ' and block should not be processed if the If condition 
+            ' was true.
+            m_Gen.EmitBranch(currBlock.EndPoint)
+
+            ' Emit the "start" point. This marks the start of the
+            ' ElseIf block
+            m_Gen.EmitLabel(currBlock.StartPoint)
+
+            SkipWhiteSpace()
+            ' Parse the ElseIf condition
+            result = ParseBooleanExpression()
+
+            ' If successful
+            If result.Code = 0 Then
+
+                ' "Eat" the optional "Then"
+                SkipWhiteSpace()
+
+                If Not EndOfLine Then
+                    ' Try to read "then"
+                    ScanName()
+                    If CurrentToken.ToLowerInvariant<>"then" Then
+                        result = CreateError(1, "then")
+                    Else
+                        ' There shouldm't be anything after "then"
+                        SkipWhiteSpace()
+                        If Not EndOfLine Then
+                            result = CreateError(1, "end of statement")
+                        End If
+                    End If
+                End If
+
+                If result.Code = 0 Then        
+                    ' Generate new "start" point. This will mark
+                    ' the next elseif statement, or an else statement
+                    currBlock.StartPoint = m_Gen.DeclareLabel()
+
+                    ' If the condition is FALSE, jump to the 
+                    ' "start" point
+                    m_Gen.EmitBranchIfFalse(currBlock.StartPoint)
+                End If
+            End If
+        End If
+
         Return result
     End Function
 #End Region

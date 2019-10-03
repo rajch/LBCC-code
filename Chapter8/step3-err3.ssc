@@ -1,0 +1,15 @@
+int i:=22
+
+if i>30
+    print "more than 30"
+elseif i>15 then
+    print "more than 15 but less than 31"
+elseif i>10
+    print "more than 10 but less than 16"
+elseif i<5
+    print "less than 5"
+else
+    print "between 6 and 10 inclusive"
+
+
+print "Done"
