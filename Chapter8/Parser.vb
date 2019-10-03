@@ -188,7 +188,7 @@ Public Partial Class Parser
     Private Function IsNameCharacter(ByVal c As Char) As Boolean
         Dim result As Boolean = False
         If Char.IsDigit(c) AndAlso _
-                    Tokenlength > 0 Then
+                    TokenLength > 0 Then
             ' Digits allowed after start of name
             result = True
         ElseIf c.Equals("_"c) Then
