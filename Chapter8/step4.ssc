@@ -1,0 +1,25 @@
+Int i:=99
+
+While i>0
+    Print i
+    Print "bottles of beer on the wall,"
+    Print i
+    Print "bottles of beer."
+    Print "Take one down and pass it around,"
+
+    If i>1 Then
+        Print i-1
+        Print "bottles of beer on the wall."
+    Else
+        Print "No more bottles of beer on the wall."
+    End If
+
+    i = i - 1
+
+    Print ""
+End While
+
+Print "No more bottles of beer on the wall."
+Print "No more bottles of beer..."
+Print "Go to the store and buy some more..."
+Print "99 bottles of beer."

@@ -41,6 +41,7 @@ Public Partial Class Parser
         AddCommand("if",        AddressOf ParseIfCommand)
         AddCommand("else",      AddressOf ParseElseCommand)
         AddCommand("elseif",    AddressOf ParseElseIfCommand)
+        AddCommand("while",     AddressOf ParseWhileCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -402,6 +403,52 @@ Public Partial Class Parser
                     ' If the condition is FALSE, jump to the 
                     ' "start" point
                     m_Gen.EmitBranchIfFalse(currBlock.StartPoint)
+                End If
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseWhileCommand() As ParseStatus
+        Dim result As ParseStatus
+               
+        SkipWhiteSpace()
+        If EndOfLine Then
+            result = CreateError(1, "a boolean expression")
+        Else
+            ' Generate and emit the startpoint
+            Dim startpoint As Integer = m_Gen.DeclareLabel()
+            m_Gen.EmitLabel(startpoint)
+
+            ' Parse the Boolean expression
+            result = ParseBooleanExpression()
+
+            If result.Code = 0 Then
+                ' There should be nothing else on the line
+                If Not EndOfLine Then
+                    result = CreateError(1, "end of statement")
+                Else
+                    ' Generate endpoint, and emit a conditional
+                    ' jump to it
+                    Dim endpoint As Integer = m_Gen.DeclareLabel()
+                    m_Gen.EmitBranchIfFalse(endpoint)
+
+                    ' Parse the block
+                    Dim whileblock As New Block( _
+                            "while", _
+                            startpoint, _
+                            endpoint _
+                    )
+                    result = ParseBlock(whileblock)
+
+                    If result.Code = 0 Then
+                        ' Emit jump back to startpoint
+                        m_Gen.EmitBranch(whileblock.StartPoint)
+
+                        ' Emit endpoint
+                        m_Gen.EmitLabel(whileblock.EndPoint)
+                    End If
                 End If
             End If
         End If

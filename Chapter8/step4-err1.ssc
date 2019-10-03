@@ -1,0 +1,9 @@
+var i int
+
+while i<5
+    if i<2 then
+        i = i + 2
+    else
+        i = i + 1
+    end while
+end if
