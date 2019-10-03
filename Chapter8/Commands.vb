@@ -10,6 +10,7 @@ Public Partial Class Parser
     Private m_commandTable As Dictionary(Of String, CommandParser)
     Private m_inCommentBlock As Boolean = False 
     Private m_typeTable As Dictionary(Of String, Type)
+    Private m_ElseFlag As Boolean = False
 #End Region
 
 #Region "Helper Functions"
@@ -31,13 +32,14 @@ Public Partial Class Parser
         m_commandTable = New Dictionary(Of String, CommandParser)
 
         ' Add commands here
-        AddCommand("print", AddressOf ParsePrintCommand)
-        AddCommand("rem", AddressOf ParseRemCommand)
-        AddCommand("comment", AddressOf ParseCommentCommand)
-        AddCommand("end", AddressOf ParseEndCommand)
-        AddCommand("dim", AddressOf ParseDimCommand)
-        AddCommand("var", AddressOf ParseDimCommand)
-        AddCommand("if", AddressOf ParseIfCommand)
+        AddCommand("print",     AddressOf ParsePrintCommand)
+        AddCommand("rem",       AddressOf ParseRemCommand)
+        AddCommand("comment",   AddressOf ParseCommentCommand)
+        AddCommand("end",       AddressOf ParseEndCommand)
+        AddCommand("dim",       AddressOf ParseDimCommand)
+        AddCommand("var",       AddressOf ParseDimCommand)
+        AddCommand("if",        AddressOf ParseIfCommand)
+        AddCommand("else",      AddressOf ParseElseCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -242,6 +244,13 @@ Public Partial Class Parser
             End If
 
             If result.Code=0 Then
+                ' Store old value of Else flag for nesting
+                Dim oldelseflag As Boolean = m_ElseFlag
+                ' ElseFlag should be false 
+                ' at start of a new If block
+                m_ElseFlag = False
+
+
                 Dim endpoint As Integer = m_Gen.DeclareLabel()
 
                 ' If the condition just emitted is false, emit jump
@@ -258,13 +267,63 @@ Public Partial Class Parser
                 result = ParseBlock(ifblock)
 
                 ' If the block was successfully parsed, emit
-                ' the endpoint label
+                ' the endpoint label, and restore saved else
+                ' flag for nesting
                 If result.Code = 0  Then
                     m_Gen.EmitLabel(ifblock.EndPoint)
+                    m_ElseFlag = oldelseflag
                 End If
             End If
         End If
 
+        Return result
+    End Function
+
+    Private Function ParseElseCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+
+        ' There should be nothing after Else on a line
+        If Not EndOfLine Then
+            result = CreateError(1, "end of statement")
+        Else
+            Dim currBlock As Block = m_BlockStack.CurrentBlock
+
+            ' We should be in an If block, and the Else flag should
+            ' not be set
+            If currBlock Is Nothing _
+                    OrElse _
+                currBlock.BlockType <> "if" _
+                    OrElse _
+                m_ElseFlag Then
+
+                result = CreateError(6, "Else")
+            Else
+                ' The end point is the same as the start point
+                ' This means that only an If statement has been
+                ' parsed before. Generate a new end point
+                If currBlock.EndPoint = currBlock.StartPoint Then
+                    currBlock.EndPoint = m_Gen.DeclareLabel()
+                End If
+
+                ' Emit a jump to the end point
+                ' Because a True If condition should never cause
+                ' code in the Else block to be executed
+                m_Gen.EmitBranch(currBlock.EndPoint)
+
+                ' Emit the "start" point (of the Else block now)
+                ' because a False If condition should cause
+                ' execution to continue after the Else command.
+                m_Gen.EmitLabel(currBlock.StartPoint)
+
+                ' Set the Else flag
+                m_ElseFlag = True
+
+                result = CreateError(0, "Ok")
+            End If
+        End If
+        
         Return result
     End Function
 #End Region

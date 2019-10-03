@@ -1,0 +1,11 @@
+Int i:=30
+
+If i<30 Then
+    Print "Less than 30"
+Else
+    If i>30
+        Print "More than thirty"
+    Else
+        Print "Thirty!"
+    End If
+End If

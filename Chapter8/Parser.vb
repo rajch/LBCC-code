@@ -93,6 +93,14 @@ Public Partial Class Parser
                 ' Error happens after scanning
                 ' variable name
                 errorpos = errorpos - TokenLength
+            Case 6  ' Unexpected token
+                message = String.Format( _
+                            "Type mismatch for Variable '{0}'.", _
+                            errorDescription
+                )
+                ' Error happens after scanning
+                ' unexpected token
+                errorpos = errorpos - TokenLength
             Case Else
                 message = "Unknown error."
         End Select
