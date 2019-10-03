@@ -1338,6 +1338,7 @@ Public Partial Class Parser
         m_Gen = newGen
 
         InitTypes()
+        InitLoops()
         InitCommands()
     End Sub
 End Class

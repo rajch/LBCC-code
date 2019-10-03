@@ -11,6 +11,7 @@ Public Partial Class Parser
     Private m_inCommentBlock As Boolean = False 
     Private m_typeTable As Dictionary(Of String, Type)
     Private m_ElseFlag As Boolean = False
+    Private m_loopTable As List(Of String)
 #End Region
 
 #Region "Helper Functions"
@@ -42,6 +43,8 @@ Public Partial Class Parser
         AddCommand("else",      AddressOf ParseElseCommand)
         AddCommand("elseif",    AddressOf ParseElseIfCommand)
         AddCommand("while",     AddressOf ParseWhileCommand)
+        AddCommand("exit",      AddressOf ParseLoopControlCommand)
+        AddCommand("continue",  AddressOf ParseLoopControlCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -65,6 +68,21 @@ Public Partial Class Parser
         AddType("boolean", GetType(System.Boolean))
         AddType("int", GetType(System.Int32))
         AddType("bool", GetType(System.Boolean))
+    End Sub
+
+    Private Sub AddLoop(loopName As String)
+        m_loopTable.Add(loopName)
+    End Sub
+
+    Private Function IsValidLoop(loopName As String) As Boolean
+        Return m_loopTable.Contains(loopName)
+    End Function
+
+    Private Sub InitLoops()
+        m_loopTable = New List(Of String)
+
+        ' Add loops here
+        AddLoop("while")
     End Sub
 #End Region
 
@@ -237,7 +255,7 @@ Public Partial Class Parser
                 If CurrentToken.ToLowerInvariant<>"then" Then
                     result = CreateError(1, "then")
                 Else
-                    ' There shouldm't be anything after "then"
+                    ' There shouldn't be anything after "then"
                     SkipWhiteSpace()
                     If Not EndOfLine Then
                         result = CreateError(1, "end of statement")
@@ -387,7 +405,7 @@ Public Partial Class Parser
                     If CurrentToken.ToLowerInvariant<>"then" Then
                         result = CreateError(1, "then")
                     Else
-                        ' There shouldm't be anything after "then"
+                        ' There shouldn't be anything after "then"
                         SkipWhiteSpace()
                         If Not EndOfLine Then
                             result = CreateError(1, "end of statement")
@@ -450,6 +468,45 @@ Public Partial Class Parser
                         m_Gen.EmitLabel(whileblock.EndPoint)
                     End If
                 End If
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseLoopControlCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        ' The current token is either Exit or Continue
+        Dim cmdName As String = CurrentToken.ToLowerInvariant()
+
+        ' Read the Exit loop type
+        SkipWhiteSpace()
+        ScanName()
+
+        Dim loopkind As String = CurrentToken.ToLowerInvariant()
+
+        If Not IsValidLoop(loopkind) Then
+            result = CreateError(1, "a valid loop type")
+        Else
+            ' Try to get the block from the stack
+            Dim loopBlock As Block = _
+                    m_BlockStack.GetClosestOuterBlock(loopkind)
+
+            If loopBlock Is Nothing Then
+                result = CreateError(6, cmdName & " " & loopkind)
+            Else
+                result = CreateError(0, "Ok")
+                
+                If cmdName = "exit" Then
+                    ' Emit jump to EndPoint
+                    m_Gen.EmitBranch(loopBlock.EndPoint)
+                ElseIf cmdName = "continue" Then
+                    ' Emit jump to StartPoint
+                    m_Gen.EmitBranch(loopBlock.StartPoint)
+                Else
+                    result = CreateError(6, cmdName)
+                End if
             End If
         End If
 

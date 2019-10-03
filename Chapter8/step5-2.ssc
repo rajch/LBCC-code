@@ -1,0 +1,22 @@
+int i:= 30
+
+while i>1
+    int j:=10
+
+    print i
+    print "-------"
+
+    while j>0
+        if j == 5
+            j = j - 5
+            continue while
+        end if
+
+        print j
+        j = j - 1
+    end while
+
+    print "======="
+
+    i = i / 15
+end while
