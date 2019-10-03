@@ -95,7 +95,7 @@ Public Partial Class Parser
                 errorpos = errorpos - TokenLength
             Case 6  ' Unexpected token
                 message = String.Format( _
-                            "Type mismatch for Variable '{0}'.", _
+                            "'{0}' was unexpected at this time.", _
                             errorDescription
                 )
                 ' Error happens after scanning
