@@ -61,7 +61,7 @@ Public Class Parser
             result = True
         ElseIf "+-".IndexOf(c) <> -1 And _
             TokenLength = 0 Then
-            ' If the symbol being cheked is + or -
+            ' If the symbol being checked is + or -
             ' AND we are at the START of the current
             ' token
             result = True
