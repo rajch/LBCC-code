@@ -17,6 +17,7 @@ Public Class CodeGen
 	Private m_SaveToFile As String
 	Private m_LocalVariables As _
 				New Dictionary(Of Integer, LocalBuilder)
+	Private m_Labels As New List(Of Label)
 
 	Public Sub EmitNumber(ByVal num As Integer)
 		m_ILGen.Emit(OpCodes.Ldc_I4, num)
@@ -176,6 +177,32 @@ Public Class CodeGen
 		m_ILGen.Emit(Opcodes.Call, _
 			consoletype.GetMethod( _
 			"WriteLine", paramtypes))
+	End Sub
+
+	Public Function DeclareLabel() As Integer
+		Dim lbl As Label = m_ILGen.DefineLabel()
+		m_Labels.Add(lbl)
+		Return m_Labels.Count - 1
+	End Function
+
+	Public Sub EmitLabel(ByVal labelNumber As Integer)
+		Dim lbl As Label = m_Labels(labelNumber)
+		m_ILGen.MarkLabel(lbl)
+	End Sub
+
+	Public Sub EmitBranchIfFalse(ByVal labelNumber As Integer)
+		Dim lbl As Label = m_Labels(labelNumber)
+		m_ILGen.Emit(OpCodes.Brfalse, lbl)
+	End Sub
+
+	Public Sub EmitBranchIfTrue(ByVal labelNumber As Integer)
+		Dim lbl As Label = m_Labels(labelNumber)
+		m_ILGen.Emit(OpCodes.Brtrue, lbl)
+	End Sub
+
+	Public Sub EmitBranch(ByVal labelNumber As Integer)
+		Dim lbl As Label = m_Labels(labelNumber)
+		m_ILGen.Emit(OpCodes.Br, lbl)
 	End Sub
 
 	Public Sub New(ByVal FileName As String)

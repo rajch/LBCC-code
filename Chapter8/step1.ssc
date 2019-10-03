@@ -1,0 +1,19 @@
+Dim myName As String = "Raj"
+
+If myName = "Raj" Then
+    print "Hello, " & myName
+    print "Nice name."
+End If
+
+If myName<>"Raj"
+    print "Not so nice."
+End If
+
+REM Nested if statements also work
+int i:=30
+if i>15
+    print "More than 15"
+    if i<50 then
+        print "but less than 50"
+    end if
+end if

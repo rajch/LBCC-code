@@ -37,6 +37,7 @@ Public Partial Class Parser
         AddCommand("end", AddressOf ParseEndCommand)
         AddCommand("dim", AddressOf ParseDimCommand)
         AddCommand("var", AddressOf ParseDimCommand)
+        AddCommand("if", AddressOf ParseIfCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -210,6 +211,56 @@ Public Partial Class Parser
                             result = CreateError(1, "end of statement.")
                         End If
                     End If
+                End If
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Public Function ParseIfCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+        result = ParseBooleanExpression()
+
+        If result.Code=0 Then
+            SkipWhiteSpace()
+
+            If Not EndOfLine Then
+                ' Try to read "then"
+                ScanName()
+                If CurrentToken.ToLowerInvariant<>"then" Then
+                    result = CreateError(1, "then")
+                Else
+                    ' There shouldm't be anything after "then"
+                    SkipWhiteSpace()
+                    If Not EndOfLine Then
+                        result = CreateError(1, "end of statement")
+                    End If
+                End If
+            End If
+
+            If result.Code=0 Then
+                Dim endpoint As Integer = m_Gen.DeclareLabel()
+
+                ' If the condition just emitted is false, emit jump
+                ' to endpoint
+                m_Gen.EmitBranchIfFalse(endpoint)
+
+                ' Parse the "If" block
+                Dim ifblock As Block = New Block( _
+                                    "if", _
+                                    endpoint, _
+                                    endpoint
+                )
+
+                result = ParseBlock(ifblock)
+
+                ' If the block was successfully parsed, emit
+                ' the endpoint label
+                If result.Code = 0  Then
+                    m_Gen.EmitLabel(ifblock.EndPoint)
                 End If
             End If
         End If
