@@ -12,6 +12,7 @@ Public Partial Class Parser
     Private m_typeTable As Dictionary(Of String, Type)
     Private m_ElseFlag As Boolean = False
     Private m_loopTable As List(Of String)
+    Private m_ErrorTable As Dictionary(Of Integer, String)
 #End Region
 
 #Region "Helper Functions"
@@ -84,6 +85,72 @@ Public Partial Class Parser
         ' Add loops here
         AddLoop("while")
     End Sub
+
+    Private Function CreateError( _
+                        ByVal errorcode As Integer, _
+                        ByVal errorDetail As String,  _
+                        Optional ByVal beforeToken As Boolean = False
+                    ) As ParseStatus
+
+        Dim result As ParseStatus
+        Dim message As String
+
+        Dim errorpos As Integer
+
+        If beforeToken Then
+            ' Some errors happen
+            ' at the scan position
+            errorpos = m_CharPos + 1
+        Else
+            ' Not in block error happens
+            ' after End command has been
+            ' scanned
+            errorpos = errorpos - TokenLength
+        End If
+
+        If m_ErrorTable.ContainsKey(errorcode) Then
+            message = String.Format( _
+                        m_ErrorTable(errorcode), _
+                        errorDetail _
+            )
+        Else
+            message = String.Format(
+                        "Unknown error code {0}",
+                        errorcode
+            )
+        End if
+
+
+        result = New ParseStatus(errorcode, _
+                    message, _
+                    errorpos, _
+                    m_LinePos)
+
+
+        Return result
+    End Function
+
+    Public Function BlockEnd() As ParseStatus
+        Return CreateError(-1, "", True)
+    End Function
+
+    Private Function Ok() As ParseStatus
+        Return CreateError(0, "", True)
+    End Function
+
+    Private Sub InitErrors()
+        m_ErrorTable = New Dictionary(Of Integer, String)
+
+        ' Add Error Numbers here
+        m_ErrorTable.Add(-1,    "{0}")
+        m_ErrorTable.Add(0,     "{0}")
+        m_ErrorTable.Add(1,     "Expected {0}")
+        m_ErrorTable.Add(2,     "{0}")
+        m_ErrorTable.Add(3,     "Cannot redeclare variable '{0}'")
+        m_ErrorTable.Add(4,     "Variable '{0}' not declared")
+        m_ErrorTable.Add(5,     "Type mismatch for Variable '{0}'")
+        m_ErrorTable.Add(6,     "'{0}' was unexpected at this time")
+    End Sub
 #End Region
 
 #Region "Commands"
@@ -119,7 +186,7 @@ Public Partial Class Parser
     Private Function ParseRemCommand() As ParseStatus
         ' Ignore the rest of the line
         SkipRestOfLine()
-        Return CreateError(0, "Ok")
+        Return Ok()
     End Function
 
     Private Function ParseCommentCommand() As ParseStatus
@@ -160,11 +227,11 @@ Public Partial Class Parser
             ' The token after the End command should 
             ' match the current block type
             If block.IsOfType(CurrentToken) Then
-                result = CreateError(-1, "")
+                result = BlockEnd()
             Else
                 ' Unless we are inside a comment block
                 If m_inCommentBlock Then
-                    result = CreateError(0, "Ok")
+                    result = Ok()
                 Else
                     result = CreateError(1, block.BlockType)
                 End If
@@ -333,7 +400,7 @@ Public Partial Class Parser
                 ' Set the Else flag
                 m_ElseFlag = True
 
-                result = CreateError(0, "Ok")
+                result = Ok()
             End If
         End If
         
@@ -467,7 +534,7 @@ Public Partial Class Parser
             If loopBlock Is Nothing Then
                 result = CreateError(6, cmdName & " " & loopkind)
             Else
-                result = CreateError(0, "Ok")
+                result = Ok()
                 
                 If cmdName = "exit" Then
                     ' Emit jump to EndPoint

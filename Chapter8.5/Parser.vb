@@ -36,85 +36,6 @@ Public Partial Class Parser
     Private m_SymbolTable As New SymbolTable
 #End Region
 
-#Region "Helper Functions"
-    Private Function CreateError( _
-        ByVal errorcode As Integer, _
-        ByVal errorDescription As String _
-        ) As ParseStatus
-
-        Dim result As ParseStatus
-        Dim message As String
-
-        Dim errorpos As Integer
-        ' Most errors happen
-        ' at the scan position
-        errorpos = m_CharPos + 1
-
-        Select Case errorcode
-            Case -1 ' Block finished
-                message = ""
-            Case 0  ' All good
-                message = "Ok."
-            Case 1  ' Expected something
-                message = String.Format( _
-                            "Expected {0}", _
-                            errorDescription _
-                )
-
-            Case 2  ' Not in block
-                message = errorDescription
-
-                ' Not in block error happens
-                ' after End command has been
-                ' scanned
-                errorpos = errorpos - TokenLength
-            Case 3  ' Variable already declared
-                message = String.Format( _
-                            "Cannot redeclare variable '{0}'.", _
-                            errorDescription
-                )
-
-                ' Error happens after scanning
-                ' variable name
-                errorpos = errorpos - TokenLength
-            Case 4  ' Variable not declared
-                message = String.Format( _
-                            "Variable '{0}' not declared.", _
-                            errorDescription
-                )
-                ' Error happens after scanning
-                ' variable name
-                errorpos = errorpos - TokenLength
-            Case 5  ' Variable type mismatch
-                message = String.Format( _
-                            "Type mismatch for Variable '{0}'.", _
-                            errorDescription
-                )
-                ' Error happens after scanning
-                ' variable name
-                errorpos = errorpos - TokenLength
-            Case 6  ' Unexpected token
-                message = String.Format( _
-                            "'{0}' was unexpected at this time.", _
-                            errorDescription
-                )
-                ' Error happens after scanning
-                ' unexpected token
-                errorpos = errorpos - TokenLength
-            Case Else
-                message = "Unknown error."
-        End Select
-
-        result = New ParseStatus(errorcode, _
-                    message, _
-                    errorpos, _
-                    m_LinePos)
-
-
-        Return result
-    End Function
-#End Region
-
 #Region "Recognizers"
     Private Function IsNumeric(ByVal c As Char) As Boolean
         Dim result As Boolean
@@ -478,7 +399,7 @@ Public Partial Class Parser
         
         If EndOfLine() Then
             ' An empty line is valid
-            result = CreateError(0, "Ok")
+            result = Ok()
         Else
             ScanName()
 
@@ -517,7 +438,7 @@ Public Partial Class Parser
             ' Get the current token, and
             ' Emit it
             m_Gen.EmitNumber(CInt(CurrentToken))
-            result = CreateError(0, "Ok")
+            result = Ok()
         End If
 
         Return result
@@ -642,7 +563,7 @@ Public Partial Class Parser
             result = CreateError(1, "a valid string.")
         Else
             m_Gen.EmitString(CurrentToken)
-            result = CreateError(0,"Ok")
+            result = Ok()
         End If
         
         SkipWhiteSpace()
@@ -826,7 +747,7 @@ Public Partial Class Parser
             result = ParseExpression(Type.GetType("System.Boolean"))
         Else
             m_LastTypeProcessed = lastexpressiontype
-            result = CreateError(0,"")
+            result = Ok()
         End If
 
         If result.Code = 0 Then
@@ -1083,7 +1004,7 @@ Public Partial Class Parser
                 ' Ignore rest of line
                 SkipRestOfLine()
                 ' All is good in a comment block
-                result = CreateError(0, "Ok")
+                result = Ok()
             Else
                 If IsValidCommand(commandname) Then
                     Dim parser as CommandParser = _
@@ -1103,7 +1024,7 @@ Public Partial Class Parser
                             As ParseStatus
 
         Dim result As ParseStatus
-        result = CreateError(0, "Ok.")
+        result = Ok()
         
         m_BlockStack.Push(newblock)
 
@@ -1117,7 +1038,7 @@ Public Partial Class Parser
         ' Block will end when the result code returned
         ' is -1
         If result.Code = -1 Then
-            result = CreateError(0, "Ok")
+            result = Ok()
             m_BlockStack.Pop()
         End If
         
@@ -1255,7 +1176,7 @@ Public Partial Class Parser
                     m_Gen.EmitLoadLocal(variable.Handle)
                     SkipWhiteSpace()
                     
-                    result = CreateError(0, "Ok.")
+                    result = Ok()
                 End If
             End If
         End If 
@@ -1323,7 +1244,7 @@ Public Partial Class Parser
                 result = ParseAssignment(variable)
             End If
         Else
-            result = CreateError(0, "Ok")
+            result = Ok()
         End If
 
         Return result
@@ -1334,7 +1255,7 @@ Public Partial Class Parser
                         Optional ByVal silent As Boolean = True
                     ) As ParseStatus
 
-        Dim result As ParseStatus = CreateError(0, "Ok")
+        Dim result As ParseStatus = Ok()
 
         If Not EndOfLine Then 
             ' If the next token is the noise word
@@ -1395,7 +1316,7 @@ Public Partial Class Parser
 
     Public Function Parse() As ParseStatus
         Dim result As ParseStatus
-        result = CreateError(0, "Ok.")
+        result = Ok()
 
         Do While ScanLine()
             result = ParseLine()
@@ -1424,6 +1345,7 @@ Public Partial Class Parser
         m_InputStream = newStream
         m_Gen = newGen
 
+        InitErrors()
         InitTypes()
         InitLoops()
         InitCommands()
