@@ -16,7 +16,7 @@ Public Partial Class Parser
     Private m_LineLength As Integer = 0
 
     ' The position of the line being translated
-    Private m_linePos As Integer = 0
+    Private m_LinePos As Integer = 0
     ' The character position currently being looked at
     Private m_CharPos As Integer = 0
 
@@ -108,7 +108,7 @@ Public Partial Class Parser
         result = New ParseStatus(errorcode, _
                     message, _
                     errorpos, _
-                    m_linePos)
+                    m_LinePos)
 
 
         Return result
@@ -159,17 +159,13 @@ Public Partial Class Parser
         Return "nNoOtT!".IndexOf(c) > -1
     End Function
 
-    Private Function IsNotOperator(Byval c As Char) As Boolean
+    Private Function IsNotOperator(ByVal c As Char) As Boolean
         Dim result As Boolean = False
 
         If c = "!"c Then
             result = True
-        ElseIf Char.ToLowerInvariant(c) = "n"c AndAlso _
-            m_LineLength >= m_CharPos+2 Then
-
-            Dim peektoken As String
-            peektoken = m_ThisLine.Substring(m_CharPos,3).ToLowerInvariant()
-            If peektoken = "not" Then
+        ElseIf Char.ToLowerInvariant(c) = "n"c Then
+            If PeekAhead(3).ToLowerInvariant() = "not" Then
                 result = True
             End If
         End If
@@ -239,6 +235,60 @@ Public Partial Class Parser
         End Get
     End Property
 
+    Private ReadOnly Property CurrentLine() As Integer
+        Get
+            Return m_linePos
+        End Get
+    End Property
+
+    Private ReadOnly Property CurrentPosition() As Integer
+        Get
+            Return m_CharPos
+        End Get
+    End Property
+
+    Private Function PeekAhead(ByVal count As Integer) As String
+        Dim charcount As Integer = m_LineLength - m_CharPos
+        If charcount >= count Then
+            charcount = count
+        End If
+        Return m_ThisLine.Substring(m_CharPos,count) 
+    End Function
+
+    Private Sub SkipCharacter()
+        m_CharPos += 1
+    End Sub
+
+    Private Sub SkipWhiteSpace()
+        Do While IsWhiteSpace(LookAhead)
+            If EndOfLine() Then
+                Exit Do
+            Else
+                SkipCharacter()
+            End If
+        Loop
+    End Sub
+
+    Private Sub SkipRestOfLine()
+        m_CharPos = m_LineLength
+    End Sub
+
+    Private Sub Backtrack()
+        If TokenLength > 0 Then
+            m_CharPos -= TokenLength
+            ResetToken()
+        End If
+    End Sub
+
+    Private Sub AppendToToken()
+        m_CurrentTokenBldr.Append(LookAhead)
+        m_CharPos += 1
+    End Sub
+
+    Private Sub ResetToken()
+        m_CurrentTokenBldr = New StringBuilder()
+    End Sub
+
     Private Function ScanLine() As Boolean
         Dim result As Boolean
         Dim line As String
@@ -252,7 +302,7 @@ Public Partial Class Parser
             ' and set character position back to 0
             m_ThisLine = line
             m_LineLength = m_ThisLine.Length
-            m_linePos += 1
+            m_LinePos += 1
             m_CharPos = 0
             result = True
         End If
@@ -261,52 +311,35 @@ Public Partial Class Parser
     End Function
 
     Private Sub ScanNumber()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         Do While m_CharPos < m_LineLength
             If Not IsNumeric(LookAhead) Then
                 Exit Do
             End If
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
-        Loop
-    End Sub
-
-    Private Sub SkipWhiteSpace()
-        Do While IsWhiteSpace(LookAhead)
-            If EndOfLine() Then
-                Exit Do
-            Else
-                m_CharPos += 1
-            End If
+            AppendToToken()
         Loop
     End Sub
 
     Private Sub ScanMulOrDivOperator()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         If IsMulOrDivOperator(LookAhead) Then
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         End If
     End Sub
 
     Private Sub ScanAddOrSubOperator()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         If IsAddOrSubOperator(LookAhead) Then
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         End If
-    End Sub
-
-    Private Sub SkipCharacter()
-        m_CharPos += 1
     End Sub
 
     Private Sub ScanString()
         m_EmptyStringFlag = False
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         If Not LookAhead.Equals(""""c) Then
             Exit Sub
@@ -317,12 +350,11 @@ Public Partial Class Parser
             Do While Not LookAhead.Equals(""""c)
 
                 If EndOfLine Then
-                    m_CurrentTokenBldr = New StringBuilder
+                    ResetToken()
                     Exit Sub
                 End If
 
-                m_CurrentTokenBldr.Append(LookAhead)
-                m_CharPos += 1
+                AppendToToken()
             Loop
 
             SkipCharacter()
@@ -338,83 +370,77 @@ Public Partial Class Parser
     End Sub
 
     Private Sub ScanConcatOperator
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
         
         If IsConcatOperator(LookAhead) Then
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         End If	
     End Sub
 
     Private Sub ScanRelOperator
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
         
         Do While IsRelOperator(LookAhead)
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         Loop
 
         Select Case CurrentToken
             Case "=","==", "===", "<>", "!=", "!==", ">", "<", ">=", "=>","<=","=<"
                 ' Valid relational operator
             Case Else
-                m_CurrentTokenBldr = New StringBuilder
+                ResetToken()
         End Select
     End Sub
 
     Private Sub ScanNotOperator()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         Do While IsNotOperatorSymbol(LookAhead)
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         Loop
 
         Select Case CurrentToken.ToLowerInvariant()
             Case "not", "!"
                 ' Valid NOT operator
             Case Else
-                m_CurrentTokenBldr = New StringBuilder
+                ResetToken()
         End Select
     End Sub
 
     Private Sub ScanAndOperator()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         Do While IsAndOperator(LookAhead)
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         Loop
 
         Select Case CurrentToken.ToLowerInvariant()
             Case "and", "&"
                 ' Valid AND operator
             Case Else
-                m_CurrentTokenBldr = New StringBuilder
+                ResetToken()
         End Select
     End Sub
 
     Private Sub ScanOrOperator()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         Do While IsOrOperator(LookAhead)
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         Loop
 
         Select Case CurrentToken.ToLowerInvariant()
             Case "or", "|"
                 ' Valid OR operator
             Case Else
-                m_CurrentTokenBldr = New StringBuilder
+                ResetToken()
         End Select
     End Sub
 
     Private Sub ScanName()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
         Do While IsNameCharacter(LookAhead)
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
             If EndOfLine Then
                 Exit Do
             End If
@@ -422,25 +448,17 @@ Public Partial Class Parser
     End Sub
 
     Private Sub ScanAssignmentOperator()
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
         Do While IsAssignmentCharacter(LookAhead)
-            m_CurrentTokenBldr.Append(LookAhead)
-            m_CharPos += 1
+            AppendToToken()
         Loop
 
         Select Case CurrentToken
             Case "=", ":="
                 ' Valid Assignment operator
             Case Else
-                m_CurrentTokenBldr = New StringBuilder
+                ResetToken()
         End Select
-    End Sub
-
-    Private Sub Backtrack()
-        If TokenLength > 0 Then
-            m_CharPos -= TokenLength
-            m_CurrentTokenBldr = New StringBuilder()
-        End If
     End Sub
 #End Region
 
@@ -777,7 +795,7 @@ Public Partial Class Parser
                 Case "=","==","===", "<>", "!=", "!=="
                     result = ParseBooleanExpression()
                 Case Else
-                    result = CreateError(1, "and = or <> operator")
+                    result = CreateError(1, "= or <> operator")
             End Select
             
         Else
@@ -1009,7 +1027,7 @@ Public Partial Class Parser
         ' Since we are doing the work of the scanner by using the
         ' lookahead character, we need to initialize the token
         ' builder
-        m_CurrentTokenBldr = New StringBuilder
+        ResetToken()
 
         If LookAhead.Equals(""""c) Then
             result = ParseStringExpression()
@@ -1057,7 +1075,7 @@ Public Partial Class Parser
                 result = ParseEndCommand()
             ElseIf m_inCommentBlock Then
                 ' Ignore rest of line
-                m_CharPos = m_LineLength
+                SkipRestOfLine()
                 ' All is good in a comment block
                 result = CreateError(0, "Ok")
             Else

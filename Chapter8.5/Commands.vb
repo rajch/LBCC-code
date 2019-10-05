@@ -118,10 +118,9 @@ Public Partial Class Parser
 
     Private Function ParseRemCommand() As ParseStatus
         ' Ignore the rest of the line
-        m_CharPos = m_LineLength
+        SkipRestOfLine()
         Return CreateError(0, "Ok")
     End Function
-
 
     Private Function ParseCommentCommand() As ParseStatus
         Dim result As ParseStatus
