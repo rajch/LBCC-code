@@ -193,16 +193,13 @@ Public Partial Class Parser
                 ' Variable name already declared
                 result = CreateError(3, CurrentToken)
             Else
-                ' Read either "as" or type
                 SkipWhiteSpace()
-                ScanName()
 
                 ' Check and ignore "As"
-                If CurrentToken.ToLowerInvariant() = "as" Then
-                    ' Read type
-                    SkipWhiteSpace()
-                    ScanName()
-                End If
+                ParseNoiseWord("As")
+
+                ' Read type
+                ScanName()
 
                 Dim typename As String
                 typename = CurrentToken
@@ -248,19 +245,7 @@ Public Partial Class Parser
         If result.Code=0 Then
             SkipWhiteSpace()
 
-            If Not EndOfLine Then
-                ' Try to read "then"
-                ScanName()
-                If CurrentToken.ToLowerInvariant<>"then" Then
-                    result = CreateError(1, "then")
-                Else
-                    ' There shouldn't be anything after "then"
-                    SkipWhiteSpace()
-                    If Not EndOfLine Then
-                        result = CreateError(1, "end of statement")
-                    End If
-                End If
-            End If
+            result = ParseLastNoiseWord("Then")
 
             If result.Code=0 Then
                 ' Store old value of Else flag for nesting
@@ -268,7 +253,6 @@ Public Partial Class Parser
                 ' ElseFlag should be false 
                 ' at start of a new If block
                 m_ElseFlag = False
-
 
                 Dim endpoint As Integer = m_Gen.DeclareLabel()
 
@@ -398,19 +382,7 @@ Public Partial Class Parser
                 ' "Eat" the optional "Then"
                 SkipWhiteSpace()
 
-                If Not EndOfLine Then
-                    ' Try to read "then"
-                    ScanName()
-                    If CurrentToken.ToLowerInvariant<>"then" Then
-                        result = CreateError(1, "then")
-                    Else
-                        ' There shouldn't be anything after "then"
-                        SkipWhiteSpace()
-                        If Not EndOfLine Then
-                            result = CreateError(1, "end of statement")
-                        End If
-                    End If
-                End If
+                result = ParseLastNoiseWord("Then")
 
                 If result.Code = 0 Then        
                     ' Generate new "start" point. This will mark

@@ -248,11 +248,17 @@ Public Partial Class Parser
     End Property
 
     Private Function PeekAhead(ByVal count As Integer) As String
+        Dim result As String
         Dim charcount As Integer = m_LineLength - m_CharPos
-        If charcount >= count Then
-            charcount = count
-        End If
-        Return m_ThisLine.Substring(m_CharPos,count) 
+
+        If charcount <= 0 Then
+            result = ""                    
+        Else
+            If charcount > count Then charcount = count
+            result = m_ThisLine.Substring(m_CharPos,charcount)
+        End if
+
+        Return result
     End Function
 
     Private Sub SkipCharacter()
@@ -1322,6 +1328,69 @@ Public Partial Class Parser
 
         Return result
     End Function
+
+    Private Function ParseNoiseWord( _
+                        ByVal word As String,
+                        Optional ByVal silent As Boolean = True
+                    ) As ParseStatus
+
+        Dim result As ParseStatus = CreateError(0, "Ok")
+
+        If Not EndOfLine Then 
+            ' If the next token is the noise word
+            ' followed by a whitespace, skip it silently.
+            ' If it isn't, raise and error if required, 
+            ' but don't move the current position.
+
+            Dim peekby As Integer = word.Length + 1
+            Dim peektoken As String = PeekAhead(peekby)
+
+            word = word.ToLowerInvariant()
+            peektoken = peektoken.ToLowerInvariant()
+
+            If peektoken.StartsWith(word) _
+                    AndAlso _
+                (
+                    word.Length = peektoken.Length _
+                        OrElse _
+                    IsWhiteSpace( _
+                        peektoken.Chars(peektoken.Length-1) _ 
+                    ) _
+                ) Then
+
+                ' The token matches, and the next character
+                ' is empty or whitespace. Scan and ignore
+                '  the word
+                ScanName()
+                SkipWhiteSpace()
+
+            Else
+                If Not silent Then
+                    result = CreateError(1, word)
+                End If
+            End If
+        End if
+        
+        Return result
+    End Function
+
+    Private Function ParseLastNoiseWord( _
+                        ByVal word As String _ 
+                    ) As ParseStatus
+
+        Dim result As ParseStatus
+
+        ' The noise word should be the last word in
+        ' a line
+        result = ParseNoiseWord(word, False)
+        If result.Code = 0 Then
+            If Not EndOfLine Then
+                result = CreateError(1, "end of statement")
+            End If
+        End If
+
+        Return result
+    End Function 
 #End Region
 
     Public Function Parse() As ParseStatus
