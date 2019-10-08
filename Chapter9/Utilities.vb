@@ -184,3 +184,11 @@ Public Class SymbolTable
         Return m_SymbolTable.ContainsKey(name.ToLowerInvariant())
     End Function
 End Class
+
+Public Class SwitchState
+    Public ExpressionVariable As Integer
+    Public ExpressionType As Type
+    Public CaseFlag As Boolean
+    Public DefaultFlag As Boolean
+    Public FallthroughFlag As Boolean
+End Class

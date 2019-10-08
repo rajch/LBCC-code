@@ -1,0 +1,31 @@
+Int ItemPrice := 800
+Dim CardType As String = "Platinum"
+Dim DiscountPercent As Integer
+
+Switch ItemPrice/100
+    Case 10
+        Print "Because 10"
+        DiscountPercent:= 10
+    Case 9
+        Print "Because 9"
+        FallThrough
+    Case 8
+        Print "Because 8"
+        FallThrough
+    Case 7
+        Print "Because 7"
+        Switch CardType
+            Case "Platinum"
+                Print "Because Platinum"
+                DiscountPercent:=10
+            Default
+                Print "Because Not Platinum"
+                DiscountPercent := 8
+        End Switch
+    Default
+        Print "Because no other choice"
+        DiscountPercent := 0
+End Switch
+
+Print "Discount percent is:"
+Print DiscountPercent

@@ -13,6 +13,7 @@ Public Partial Class Parser
     Private m_ElseFlag As Boolean = False
     Private m_loopTable As List(Of String)
     Private m_ErrorTable As Dictionary(Of Integer, String)
+    Private m_SwitchState As SwitchState
 #End Region
 
 #Region "Helper Functions"
@@ -34,23 +35,27 @@ Public Partial Class Parser
         m_commandTable = New Dictionary(Of String, CommandParser)
 
         ' Add commands here
-        AddCommand("print",     AddressOf ParsePrintCommand)
-        AddCommand("rem",       AddressOf ParseRemCommand)
-        AddCommand("comment",   AddressOf ParseCommentCommand)
-        AddCommand("end",       AddressOf ParseEndCommand)
-        AddCommand("dim",       AddressOf ParseDimCommand)
-        AddCommand("var",       AddressOf ParseDimCommand)
-        AddCommand("if",        AddressOf ParseIfCommand)
-        AddCommand("else",      AddressOf ParseElseCommand)
-        AddCommand("elseif",    AddressOf ParseElseIfCommand)
-        AddCommand("while",     AddressOf ParseWhileCommand)
-        AddCommand("exit",      AddressOf ParseLoopControlCommand)
-        AddCommand("continue",  AddressOf ParseLoopControlCommand)
-        AddCommand("repeat",    AddressOf ParseRepeatCommand)
-        AddCommand("until",     AddressOf ParseUntilCommand)
-        AddCommand("loop",      AddressOf ParseLoopCommand)
-        AddCommand("for",       AddressOf ParseForCommand)
-        AddCommand("next",      AddressOf ParseNextCommand)
+        AddCommand("print",         AddressOf ParsePrintCommand)
+        AddCommand("rem",           AddressOf ParseRemCommand)
+        AddCommand("comment",       AddressOf ParseCommentCommand)
+        AddCommand("end",           AddressOf ParseEndCommand)
+        AddCommand("dim",           AddressOf ParseDimCommand)
+        AddCommand("var",           AddressOf ParseDimCommand)
+        AddCommand("if",            AddressOf ParseIfCommand)
+        AddCommand("else",          AddressOf ParseElseCommand)
+        AddCommand("elseif",        AddressOf ParseElseIfCommand)
+        AddCommand("while",         AddressOf ParseWhileCommand)
+        AddCommand("exit",          AddressOf ParseLoopControlCommand)
+        AddCommand("continue",      AddressOf ParseLoopControlCommand)
+        AddCommand("repeat",        AddressOf ParseRepeatCommand)
+        AddCommand("until",         AddressOf ParseUntilCommand)
+        AddCommand("loop",          AddressOf ParseLoopCommand)
+        AddCommand("for",           AddressOf ParseForCommand)
+        AddCommand("next",          AddressOf ParseNextCommand)
+        AddCommand("switch",        AddressOf ParseSwitchCommand)
+        AddCommand("case",          AddressOf ParseCaseCommand)
+        AddCommand("default",       AddressOf ParseDefaultCommand)
+        AddCommand("fallthrough",   AddressOf ParseFallThroughCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -899,6 +904,242 @@ Public Partial Class Parser
             result = BlockEnd()
         Else
             result = CreateError(6, "Next")
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseSwitchCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+
+        ' Parse an Expression
+        SkipWhiteSpace()
+        result = ParseExpression()
+
+        If result.Code<>0 Then
+            Return result
+        End If
+
+        ' Store old Switch state
+        ' This behavior is necessary because Switch
+        ' statements can be nested.
+        Dim oldSwitchState As SwitchState = m_SwitchState
+
+        ' Create new state, with an internal variable to
+        ' store the Switch expression just parsed
+        m_SwitchState = New SwitchState()
+        With m_SwitchState
+            .CaseFlag = True
+            .DefaultFlag = False
+            .FallThroughFlag = False
+            .ExpressionVariable = _
+                    m_Gen.DeclareVariable( _
+                        MakeUniqueVariableName(), _
+                        m_LastTypeProcessed _
+                    )
+            .ExpressionType = m_LastTypeProcessed
+        End With
+
+        ' Emit a store to the internal variable. ParseExpression
+        ' has left the value of the expression on the stack
+        m_Gen.EmitStoreInLocal(m_SwitchState.ExpressionVariable)
+
+        ' There should be nothing else on the line
+        SkipWhiteSpace()
+        If Not EndOfLine Then
+            Return CreateError(1, "end of statement")
+        End If
+
+        ' Pre-set the endpoint. This will not change
+        Dim endpoint As Integer = m_Gen.DeclareLabel()
+
+        ' Parse the block
+        Dim switchBlock As New Block( _
+                                "switch", _
+                                -1, _
+                                endpoint _
+        )
+
+        result = ParseBlock(switchBlock)
+
+        If result.Code = 0 Then
+            ' If there is a dangling startpoint
+            ' emit it
+            If switchBlock.StartPoint <> -1 Then
+                m_Gen.EmitLabel(switchBlock.StartPoint)
+            End If
+
+            ' Emit the endpoint
+            m_Gen.EmitLabel(switchBlock.EndPoint)
+
+            ' Restore the old Switch State
+            m_SwitchState = oldSwitchState
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseCaseCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        If m_BlockStack.IsEmpty _
+                OrElse _
+            m_BlockStack.CurrentBlock.BlockType <> "switch" Then
+
+            Return CreateError(6, "Case")
+        End If
+
+        Dim switchblock As Block = m_BlockStack.CurrentBlock
+
+        ' If default statement has already been processed
+        ' get out
+        If m_SwitchState.DefaultFlag Then
+            Return CreateError(6, "Case")
+        End If
+
+        ' This could be the first case statement, or the end
+        ' of the previous case statement. In the latter case,
+        ' we need to emit a jump to the current block's
+        ' endingpoint before we start processing this case
+        ' statement
+        If Not m_SwitchState.CaseFlag Then
+            ' This is the end of the previous case statement
+            m_Gen.EmitBranch(switchblock.EndPoint)
+        End If
+
+        ' If the fallthrough flag is set, we need to jump over
+        ' the condition. So we generate a label and a jump
+        ' Fallthrough is weird
+        Dim fallThroughLabel As Integer
+
+        If m_SwitchState.FallThroughFlag Then
+            fallThroughLabel = m_Gen.DeclareLabel()
+            m_Gen.EmitBranch(fallThroughLabel)
+        End If
+
+        ' Emit the current startpoint if there is one
+        If switchblock.StartPoint <> -1 Then
+            m_Gen.EmitLabel(switchblock.StartPoint)
+        End If
+
+        ' Create new startpoint for the next case
+        switchblock.StartPoint = m_Gen.DeclareLabel()
+
+        SkipWhiteSpace()
+        ' Depending on the type of the switch expression
+        ' do the appropriate type of expression
+        With m_SwitchState
+            If .ExpressionType.Equals( _
+                    GetType(System.Int32) _
+                ) Then
+
+                result = ParseNumericExpression()
+            ElseIf .ExpressionType.Equals( _
+                        GetType(System.String) _
+                    ) Then
+
+                result = ParseStringExpression()
+            ElseIf .ExpressionType.Equals( _
+                        GetType(System.Boolean) _
+                    ) Then
+
+                result = ParseBooleanExpression()
+            Else
+                result = CreateError(1, "a valid expression")
+            End If
+
+            If result.Code = 0 Then
+                ' Emit the Switch Expression
+                m_Gen.EmitLoadLocal(.ExpressionVariable)
+
+                ' Emit comparison
+                If .ExpressionType.Equals( _
+                        GetType(System.String) _
+                    ) Then
+
+                    m_Gen.EmitStringEquality()
+                Else
+                    m_Gen.EmitEqualityComparison()
+                End If
+
+                ' If NOT equal, jump to the next Case
+                m_Gen.EmitBranchIfFalse(switchBlock.StartPoint)
+
+                ' Emit the Fallthrough label if the Fallthrough
+                ' flag is set, and reset the flag
+                If m_SwitchState.FallThroughFlag Then
+                    m_Gen.EmitLabel(fallThroughLabel)
+                    m_SwitchState.FallThroughFlag = False
+                End If
+
+                ' Reset the case flag
+                m_SwitchState.CaseFlag = False
+            End If
+        End With
+
+        Return result
+    End Function
+
+    Private Function ParseDefaultCommand() As ParseStatus
+
+        If m_BlockStack.IsEmpty _
+                OrElse _
+            m_BlockStack.CurrentBlock.BlockType <> "switch" Then
+
+            Return CreateError(6, "Default")
+        End If
+
+        Dim switchblock As Block = m_BlockStack.CurrentBlock
+
+        ' If default statement has already been processed
+        ' get out
+        If m_SwitchState.DefaultFlag Then
+            Return CreateError(6, "Default")
+        End If
+
+        ' This default could be the ONLY case in the
+        ' switch block, or the last case
+
+        ' In the first situation, we need to emit a jump to
+        ' the current block's endpoint before we start
+        ' processing this
+        If Not m_SwitchState.CaseFlag Then
+            ' This is the end of a previous case statement
+            m_Gen.EmitBranch(switchblock.EndPoint)
+        End If
+
+        ' Emit the current startpoint if there is one
+        If switchblock.StartPoint <> -1 Then
+            m_Gen.EmitLabel(switchblock.StartPoint)
+        End If
+
+        ' Reset the Case flag
+        m_SwitchState.CaseFlag = False
+
+        ' Set the default flag
+        m_SwitchState.DefaultFlag = True
+
+        ' No more startpoints needed, as default is the
+        ' last case
+        switchblock.StartPoint = -1
+
+        Return Ok()
+    End Function
+
+    Private Function ParseFallThroughCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        If m_BlockStack.IsEmpty _
+                OrElse _
+            m_BlockStack.CurrentBlock.BlockType <> "switch" Then
+
+            result = CreateError(6, "Fallthrough")
+        Else
+            m_SwitchState.CaseFlag = True
+            m_SwitchState.FallThroughFlag = True
+            result = Ok()
         End If
 
         Return result

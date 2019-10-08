@@ -1001,7 +1001,7 @@ Public Partial Class Parser
 
     Private Function ParseCommand() As ParseStatus
         Dim result As ParseStatus
-        
+
         If TokenLength = 0 Then
             result = CreateError(1, "a valid command")
         Else
@@ -1012,11 +1012,24 @@ Public Partial Class Parser
                 result = ParseCommentCommand()
             ElseIf commandname = "end"
                 result = ParseEndCommand()
+            ElseIf commandname = "rem" Then
+                result = ParseRemCommand()
             ElseIf m_inCommentBlock Then
                 ' Ignore rest of line
                 SkipRestOfLine()
                 ' All is good in a comment block
                 result = Ok()
+            ElseIf m_SwitchState IsNot Nothing _
+                        AndAlso
+                    m_SwitchState.CaseFlag Then
+
+                If commandname = "case" Then
+                    result = ParseCaseCommand()
+                ElseIf commandname = "default" Then
+                    result = ParseDefaultCommand()
+                Else
+                    result = CreateError(1, "Case or Default")
+                End If
             Else
                 If IsValidCommand(commandname) Then
                     Dim parser as CommandParser = _
