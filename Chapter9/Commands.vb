@@ -48,6 +48,7 @@ Public Partial Class Parser
         AddCommand("continue",  AddressOf ParseLoopControlCommand)
         AddCommand("repeat",    AddressOf ParseRepeatCommand)
         AddCommand("until",     AddressOf ParseUntilCommand)
+        AddCommand("loop",      AddressOf ParseLoopCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -87,6 +88,7 @@ Public Partial Class Parser
         ' Add loops here
         AddLoop("while")
         AddLoop("repeat")
+        AddLoop("loop")
     End Sub
 
     Private Function CreateError( _
@@ -646,6 +648,46 @@ Public Partial Class Parser
                     ' End the block
                     result = BlockEnd()
                 End If
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseLoopCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+
+        ' There should be nothing after Loop
+        If Not EndOfLine Then
+            result = CreateError(1, "end of statement")
+        Else
+            Dim startpoint As Integer
+            Dim endpoint As Integer
+
+            ' Generate and emit startpoint
+            startpoint = m_Gen.DeclareLabel()
+            m_Gen.EmitLabel(startpoint)
+
+            ' Generate endpoint
+            endpoint = m_Gen.DeclareLabel()
+
+            ' Create the Loop block
+            Dim loopBlock As New Block( _
+                                "loop", _
+                                startpoint, _
+                                endpoint _
+            )
+
+            result = ParseBlock(loopBlock)
+
+            If result.Code = 0 Then
+                ' Emit jump to startpoint
+                m_Gen.EmitBranch(loopBlock.StartPoint)
+
+                ' Emit endpoint
+                m_Gen.EmitLabel(loopBlock.EndPoint)
             End If
         End If
 

@@ -1,0 +1,8 @@
+int i:=1
+
+loop
+    print i
+    exit loop when i=4
+    i = i + 1
+end loop
+
