@@ -103,14 +103,16 @@ Public Partial Class Parser
         If beforeToken Then
             ' Some errors happen
             ' at the scan position
-            errorpos = m_CharPos + 1
+            errorpos = m_CharPos
         Else
-            ' Not in block error happens
-            ' after End command has been
-            ' scanned
-            errorpos = errorpos - TokenLength
+            ' Others happen after a token
+            ' has been scanned
+            errorpos = m_CharPos - TokenLength
         End If
 
+        ' Columns should be 1-based for reporting
+        errorpos = errorpos + 1
+        
         If m_ErrorTable.ContainsKey(errorcode) Then
             message = String.Format( _
                         m_ErrorTable(errorcode), _
