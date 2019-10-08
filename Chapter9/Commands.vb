@@ -630,11 +630,14 @@ Public Partial Class Parser
         Dim result As ParseStatus
 
         ' Until is only valid if we are currently in a repeat block
-        Dim repeatblock As Block = m_BlockStack.CurrentBlock
+        If m_BlockStack.IsEmpty _
+                OrElse _
+            m_BlockStack.CurrentBlock.BlockType <> "repeat" Then
 
-        If repeatblock.BlockType <> "repeat" Then
             result = CreateError(6, "Until")
         Else
+            Dim repeatblock As Block = m_BlockStack.CurrentBlock
+
             SkipWhiteSpace()
 
             ' There should be a boolean expression after Until
