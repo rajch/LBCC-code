@@ -1,0 +1,16 @@
+Dim i As Integer:=1
+
+Repeat
+    print i
+
+    if i=3
+        i:=i+2
+        continue repeat
+    end if
+
+    exit repeat when i=8
+
+    i=i+1
+Until i>10
+
+print "Done"

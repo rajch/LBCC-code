@@ -46,6 +46,8 @@ Public Partial Class Parser
         AddCommand("while",     AddressOf ParseWhileCommand)
         AddCommand("exit",      AddressOf ParseLoopControlCommand)
         AddCommand("continue",  AddressOf ParseLoopControlCommand)
+        AddCommand("repeat",    AddressOf ParseRepeatCommand)
+        AddCommand("until",     AddressOf ParseUntilCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -84,6 +86,7 @@ Public Partial Class Parser
 
         ' Add loops here
         AddLoop("while")
+        AddLoop("repeat")
     End Sub
 
     Private Function CreateError( _
@@ -227,7 +230,12 @@ Public Partial Class Parser
             ' The token after the End command should 
             ' match the current block type
             If block.IsOfType(CurrentToken) Then
-                result = BlockEnd()
+                ' If this is 'End Repeat'
+                If CurrentToken.ToLowerInvariant() = "repeat" Then
+                    result = ParseUntilCommand()
+                Else
+                    result = BlockEnd()
+                End If
             Else
                 ' Unless we are inside a comment block
                 If m_inCommentBlock Then
@@ -518,6 +526,9 @@ Public Partial Class Parser
         ' The current token is either Exit or Continue
         Dim cmdName As String = CurrentToken.ToLowerInvariant()
 
+        ' It should be followed by a valid loop type, and we 
+        ' should be inside that type of loop
+
         ' Read the Exit loop type
         SkipWhiteSpace()
         ScanName()
@@ -534,18 +545,124 @@ Public Partial Class Parser
             If loopBlock Is Nothing Then
                 result = CreateError(6, cmdName & " " & loopkind)
             Else
-                result = Ok()
-                
-                If cmdName = "exit" Then
-                    ' Emit jump to EndPoint
-                    m_Gen.EmitBranch(loopBlock.EndPoint)
-                ElseIf cmdName = "continue" Then
-                    ' Emit jump to StartPoint
-                    m_Gen.EmitBranch(loopBlock.StartPoint)
+                SkipWhiteSpace()
+
+                If Not EndOfLine Then
+                    ' There should be a When clause here    
+                    result = ParseWhenClause()
+
+                    If result.Code=0 Then
+                        If cmdName = "exit" Then
+                            ' Emit conditional jump to EndPoint
+                            m_Gen.EmitBranchIfTrue(loopBlock.EndPoint)
+                        ElseIf cmdName = "continue" Then
+                            ' Emit conditional jump to StartPoint
+                            m_Gen.EmitBranchIfTrue(loopBlock.StartPoint)
+                        Else
+                            result = CreateError(6, cmdName)
+                        End if
+                    End If
                 Else
-                    result = CreateError(6, cmdName)
-                End if
+                    result = Ok()
+                    
+                    If cmdName = "exit" Then
+                        ' Emit jump to EndPoint
+                        m_Gen.EmitBranch(loopBlock.EndPoint)
+                    ElseIf cmdName = "continue" Then
+                        ' Emit jump to StartPoint
+                        m_Gen.EmitBranch(loopBlock.StartPoint)
+                    Else
+                        result = CreateError(6, cmdName)
+                    End if
+                End If
             End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseRepeatCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        SkipWhiteSpace()
+        
+        ' There should be nothing after Repeat
+        If Not EndOfLine Then
+            result = CreateError(1, "end of statement")
+        Else
+            Dim startpoint As Integer
+            Dim endpoint As Integer
+
+            ' Generate and emit startpoint
+            startpoint = m_Gen.DeclareLabel()
+            m_Gen.EmitLabel(startpoint)
+
+            ' Generate endpoint
+            endpoint = m_Gen.DeclareLabel()
+
+            ' Parse the Repeat block
+            Dim repeatblock As New Block( _ 
+                                    "repeat", _
+                                    startpoint, _
+                                    endpoint _ 
+            )
+
+
+            result = ParseBlock(repeatblock)
+
+            If result.Code = 0 Then
+                ' Emit endpoint
+                m_Gen.EmitLabel(repeatblock.EndPoint)
+            End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseUntilCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        ' Until is only valid if we are currently in a repeat block
+        Dim repeatblock As Block = m_BlockStack.CurrentBlock
+
+        If repeatblock.BlockType <> "repeat" Then
+            result = CreateError(6, "Until")
+        Else
+            SkipWhiteSpace()
+
+            ' There should be a boolean expression after Until
+            If EndOfLine Then
+                result = CreateError(1, "a boolean expression")
+            Else
+                result = ParseBooleanExpression()
+
+                If result.Code = 0 Then
+                    ' If the boolean condition evaluates to FALSE
+                    ' we must jump to the start point.
+                    m_Gen.EmitBranchIfFalse(repeatblock.StartPoint)
+
+                    ' End the block
+                    result = BlockEnd()
+                End If
+            End If
+        End If
+
+        Return result
+    End Function
+#End Region
+
+#Region "Clauses"
+    Private Function ParseWhenClause() As ParseStatus
+        Dim result As ParseStatus
+
+        ScanName()
+
+        If CurrentToken.ToLowerInvariant()<>"when" Then
+            result = CreateError(1, "when")
+        Else
+            SkipWhiteSpace()
+
+            result = ParseBooleanExpression()
         End If
 
         Return result
