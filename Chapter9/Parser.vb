@@ -36,6 +36,18 @@ Public Partial Class Parser
     Private m_SymbolTable As New SymbolTable
 #End Region
 
+#Region "Helper Functions"
+    Private Function MakeUniqueVariableName() As String
+        Dim result As New StringBuilder("_clrcompiler_t_i4_")
+
+        Do
+            result.Append(CInt(Rnd() * 10))
+        Loop Until Not m_SymbolTable.Exists(result.ToString)
+
+        Return result.ToString
+    End Function
+#End Region
+
 #Region "Recognizers"
     Private Function IsNumeric(ByVal c As Char) As Boolean
         Dim result As Boolean

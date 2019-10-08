@@ -49,6 +49,8 @@ Public Partial Class Parser
         AddCommand("repeat",    AddressOf ParseRepeatCommand)
         AddCommand("until",     AddressOf ParseUntilCommand)
         AddCommand("loop",      AddressOf ParseLoopCommand)
+        AddCommand("for",       AddressOf ParseForCommand)
+        AddCommand("next",      AddressOf ParseNextCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -89,6 +91,7 @@ Public Partial Class Parser
         AddLoop("while")
         AddLoop("repeat")
         AddLoop("loop")
+        AddLoop("for")
     End Sub
 
     Private Function CreateError( _
@@ -689,6 +692,210 @@ Public Partial Class Parser
                 ' Emit endpoint
                 m_Gen.EmitLabel(loopBlock.EndPoint)
             End If
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseForCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        ' Try to scan a variable name
+        ResetToken()
+        SkipWhiteSpace()
+        ScanName()
+
+        If TokenLength = 0 Then
+            Return CreateError(1, "a variable")
+        End If
+
+        ' Check if variable exists, and is numeric
+        Dim varname As String = CurrentToken.ToLowerInvariant()
+        If Not m_SymbolTable.Exists(varname) Then
+            Return CreateError(4, CurrentToken)
+        End If
+
+        Dim variable As Symbol = m_SymbolTable.Fetch(varname)
+        If Not variable.Type.Equals(GetType(Integer)) Then
+            Return CreateError(1, "a numeric variable")
+        End If
+
+        ' Parse the next two tokens as an assignment statement
+        result = ParseAssignmentStatement()
+
+        If result.Code<>0 Then
+            Return result
+        End If
+
+        ' Parse the To Clause
+        SkipWhiteSpace()
+        ScanName()
+
+        If TokenLength=0 OrElse _
+            CurrentToken.ToLowerInvariant()<>"to" Then
+
+            Return CreateError(1, "To")
+        End If
+
+        ' Parse the <end> numberic expression
+        SkipWhiteSpace()
+        result = ParseNumericExpression()
+
+        If result.Code<>0 Then
+            Return result
+        End If
+
+        ' Declare a uniquely named variable and emit a store
+        ' to it, thus storing the <end> value.
+        Dim endVariableName As String = MakeUniqueVariableName()
+        Dim endVariable As Integer =  _
+                m_Gen.DeclareVariable( _
+                        endVariableName, _
+                        GetType(System.Int32) _
+                )
+
+        m_Gen.EmitStoreInLocal(endVariable)
+
+        ' Process the option <step> value
+        Dim defaultStep As Boolean = True
+        Dim stepVariableName As String
+        Dim stepVariable As Integer
+
+        SkipWhiteSpace()
+        If Not EndOfLine Then
+            ScanName()
+
+            If TokenLength=0 OrElse _
+                CurrentToken.ToLowerInvariant()<>"step" Then
+                Return CreateError(1, "step")
+            End If
+
+            SkipWhiteSpace()
+            result = ParseNumericExpression()
+
+            If result.Code<>0 Then
+                Return result
+            End If
+
+            stepVariableName = MakeUniqueVariableName()
+            stepVariable = m_Gen.DeclareVariable( _
+                                stepVariableName, _
+                                GetType(System.Int32) _
+                        )
+
+            m_Gen.EmitStoreInLocal(stepVariable)
+            defaultStep = False
+        End If
+
+        ' At this point, initialization of the loop is complete
+        ' We need to jump to the comparison. The jump is required
+        ' because at this point, we will emit the code that
+        ' increments the loop counter, and this incrementing should
+        ' not happen on the first iteration of the loop. So, we
+        ' declare a label that marks the start of the comparison,
+        ' and emit a jump to it.
+        Dim comparisonStart As Integer = m_Gen.DeclareLabel()
+        m_Gen.EmitBranch(comparisonStart)
+
+        ' Declare startpoint and endpoint, and emit the startpoint.
+        ' At this point, we will emit code that increments the loop
+        ' counter, and then code that checks the counter against the
+        ' <end> value. This is the real starting point of the loop.
+        Dim startpoint As Integer = m_Gen.DeclareLabel()
+        Dim endpoint As Integer = m_Gen.DeclareLabel()
+
+        m_Gen.EmitLabel(startpoint)
+
+        ' Increment the counter variable by the step value
+        m_Gen.EmitLoadLocal(variable.Handle)
+        
+        If defaultStep Then
+            m_Gen.EmitNumber(1)
+        Else
+            m_Gen.EmitLoadLocal(stepVariable)
+        End If
+        
+        m_Gen.EmitAdd()
+        m_Gen.EmitStoreInLocal(variable.Handle)
+
+        ' The comparison starts here. So, we emit the comparisonStart
+        ' label.
+        m_Gen.EmitLabel(comparisonStart)
+
+        ' If the default step value has not been used
+        ' Emit a check to see whether the step value is negative
+        ' If step is negative, emit <end> and <variable> in that order,
+        ' and jump to the comparison. In all other cases, emit 
+        ' <variable> and <end> in that order.
+        ' Then do the comparison
+        Dim normalOrderLabel As Integer
+        Dim actualCompareLabel As Integer
+
+        If Not defaultStep Then
+            With m_Gen
+                normalOrderLabel = .DeclareLabel()
+                actualCompareLabel = .DeclareLabel()
+                ' Check if step is negative
+                .EmitLoadLocal(stepVariable)
+                .EmitNumber(0)
+                .EmitGreaterThanComparison()
+                ' It is. Normal comparison
+                .EmitBranchIfTrue(normalOrderLabel)
+                ' It isn't. Emit end and counter variables,
+                ' in that order
+                .EmitLoadLocal(endVariable)
+                .EmitLoadLocal(variable.Handle)
+                ' Jump to actual comparison
+                .EmitBranch(actualCompareLabel)
+                ' The normal order of comparison
+                ' will happen now
+                .EmitLabel(normalOrderLabel)
+            End With
+        End If
+
+        ' Emit counter and end variables, in that order 
+        m_Gen.EmitLoadLocal(variable.Handle)
+        m_Gen.EmitLoadLocal(endVariable)
+        
+        ' The negative step case jumps to this point
+        If Not defaultStep Then
+            m_Gen.EmitLabel(actualCompareLabel)
+        End If
+
+        m_Gen.EmitGreaterThanComparison()
+        ' If the comparison succeeds, the loop is over
+        m_Gen.EmitBranchIfTrue(endPoint)
+
+        ' Now, Parse the block
+        Dim forBlock As Block = New Block( _ 
+                                    "for", _
+                                    startpoint, _
+                                    endpoint _
+        )
+
+        result = ParseBlock(forBlock)
+        If result.Code = 0 Then
+            ' Jump to the startpoint, where the <variable> 
+            ' will be incremented and the comparison will be done
+            m_Gen.EmitBranch(forBlock.StartPoint)
+
+            ' Emit the endpoint
+            m_Gen.EmitLabel(forBlock.EndPoint)
+        End If
+
+        Return result
+    End Function
+
+    Private Function ParseNextCommand() As ParseStatus
+        Dim result As ParseStatus
+        
+        If (Not m_BlockStack.IsEmpty) _
+                AndAlso _
+            m_BlockStack.CurrentBlock.BlockType = "for" Then
+
+            result = BlockEnd()
+        Else
+            result = CreateError(6, "Next")
         End If
 
         Return result

@@ -1,0 +1,31 @@
+Dim i As Integer
+
+Print "Countdown..."
+
+For i:=10 To 1 Step -1
+    Print i
+Next
+
+Print "Blast off"
+
+int j
+
+For i=1 to 5 Step 2
+    Print "--------------"
+    For j:=i To i+1
+        Exit For When j==2
+
+        Print "j"
+        Print j
+    End For
+
+    If i==3 Then
+        
+        Continue For
+    Else
+        Print "i"
+        Print i
+    End If
+Next
+
+Print "Done"
