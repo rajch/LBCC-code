@@ -1,0 +1,119 @@
+Stop
+
+Comment
+    This program uses just about every feature of
+    our language. It should be fun to debug.
+End Comment
+
+REM Test Repeat
+Dim i As Integer:=1
+
+Repeat
+    print i
+    if i=3
+        i:=i+2
+        continue repeat
+    end if
+
+    exit repeat when i=8
+
+    i=i+1
+end repeat i>10
+
+print "Done testing Repeat"
+
+REM stop
+
+REM Test If
+I := 22
+if i>30 Then
+    print "more than 30"
+elseif i>15 then
+    print "more than 15 but less than 31"
+elseif i>10
+    print "more than 10 but less than 16"
+elseif i<5
+    print "less than 5"
+else
+    print "between 6 and 10 inclusive"
+end if
+
+print "Done testing If"
+
+REM Test While
+i = 1
+while i<5
+    if i<2 then
+        i = i + 2
+    else
+        i = i + 1
+    end if
+    REM stop when i=4
+end while
+
+print "Done Testing While"
+
+REM Test Loop
+
+int j
+j := 1
+loop
+    print j
+    exit loop when j==4
+    j = j + 1
+end loop
+
+print "Done testing Loop"
+
+REM Test For
+
+Dim k As Integer
+Print "Countdown..."
+For k:=10 To 1 Step -1
+    Print k
+Next
+Print "Blast off"
+
+For i=1 to 5 Step 2
+    For j:=i To i+1
+        Exit For When j==2
+        Print "j"
+        Print j
+    End For
+    If i==3 Then
+        Continue For
+    Else
+        Print "i"
+        Print i
+    End If
+Next
+
+Print "Done testing For"
+
+REM Test Switch
+
+Int ItemPrice := 800
+Dim CardType As String = "Platinum"
+Dim DiscountPercent As Integer
+
+Switch ItemPrice/100
+    Case 10
+        DiscountPercent:= 10
+    Case 9
+        FallThrough
+    Case 8
+        FallThrough
+    Case 7
+        Switch CardType
+            Case "Platinum"
+                DiscountPercent:=10
+            Default
+                DiscountPercent := 8
+        End Switch
+    Default
+        DiscountPercent := 0
+End Switch
+
+Print DiscountPercent
+
+Print "Done testing Switch"

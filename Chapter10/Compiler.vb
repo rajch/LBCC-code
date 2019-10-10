@@ -16,7 +16,12 @@ Module Compiler
 		
 		If CmdArgs.Length=0 Then
             reader = Console.In
-            gen = New CodeGen("Test.exe")
+            gen = New CodeGen( _
+                        "",
+                        "Test.exe", _
+                        "Test", _
+                        False
+            )
         Else
 			If File.Exists(CmdArgs(0)) Then
 				Dim finfo As New FileInfo(CmdArgs(0))
@@ -25,11 +30,17 @@ Module Compiler
 							finfo.FullName)
 				
 				gen = new CodeGen( _
+                        finfo.FullName, _
 				        finfo.Name.Replace( _
 						    finfo.extension, _
 						    ".exe" _
-						) _
-                    )
+						), _
+                        finfo.Name.Replace( _
+                            finfo.Extension, _
+                            "" _
+                        ), _
+                        True _
+                )
 			Else
 				Console.Write( _
 					"Error: Could not find the file {0}.", _

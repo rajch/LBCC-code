@@ -6,7 +6,7 @@ Imports System
 Imports System.Reflection
 Imports System.Reflection.Emit
 Imports System.Collections.Generic
-
+Imports System.Diagnostics.SymbolStore
 
 Public Class CodeGen
 	Private m_ILGen As ILGenerator
@@ -18,6 +18,14 @@ Public Class CodeGen
 	Private m_LocalVariables As _
 				New Dictionary(Of Integer, LocalBuilder)
 	Private m_Labels As New List(Of Label)
+	Private m_debugBuild As Boolean
+	Private m_symbolStore As ISymbolDocumentWriter
+
+	Public ReadOnly Property DebugBuild() As Boolean
+		Get
+			Return m_debugBuild
+		End Get
+	End Property
 
 	Public Sub EmitNumber(ByVal num As Integer)
 		m_ILGen.Emit(OpCodes.Ldc_I4, num)
@@ -205,49 +213,6 @@ Public Class CodeGen
 		m_ILGen.Emit(OpCodes.Br, lbl)
 	End Sub
 
-	Public Sub New(ByVal FileName As String)
-		m_SaveToFile = FileName
-
-		' Compiling a CLR language produces an assembly.
-		' An assembly has one or more modules.
-		' Each module has one or more types:
-		' (structures or classes)
-		' Each type has one or more methods.
-		' Methods are where actual code resides.
-		' Create an assembly called "MainAssembly".
-
-		Dim an As New AssemblyName
-		an.Name = "MainAssembly"
-
-		m_producedAssembly = AppDomain.CurrentDomain.DefineDynamicAssembly( _
-							an, AssemblyBuilderAccess.Save _
-		)
-
-		' In MainAssembly, create a module called
-		' "MainModule".
-		m_producedmodule = m_producedAssembly.DefineDynamicModule( _
-							"MainModule", FileName, False
-		)
-
-		' In MainModule, create a class called
-		' "MainClass".
-		m_producedtype = m_producedmodule.DefineType("MainClass")
-
-		' In MainClass, create a Shared (static) method
-		' with Public scope, called "MainMethod".
-		m_producedmethod = m_producedtype.DefineMethod( _
-						"MainMethod", _
-						MethodAttributes.Public Or MethodAttributes.Static, _
-						Nothing, _
-						Nothing _
-		)
-
-		' All IL code that we produce will be contained
-		' in MainMethod.
-		m_ILGen = m_producedmethod.GetILGenerator
-
-	End Sub
-
 	Public Sub Save()
 		' Emit a RETurn opcode, which is the last
 		' opcode for any method
@@ -265,6 +230,20 @@ Public Class CodeGen
 			m_producedmethod, _
 			PEFileKinds.ConsoleApplication
 		)
+
+		' If this is a debug build, set the User
+		' Entry Point, which is the point where a
+		' debugger will start stepping
+		If m_debugBuild Then
+			Dim isMono As Boolean = _
+				Type.GetType("Mono.Runtime") IsNot Nothing
+
+			If Not isMono Then
+			 	m_producedmodule.SetUserEntryPoint( _
+			 							m_producedmethod _
+			 	)
+			End If
+		End If
 
 		m_producedAssembly.Save(m_SaveToFile)
 	End Sub
@@ -293,6 +272,10 @@ Public Class CodeGen
 		lb = m_ILGen.DeclareLocal(VariableType)
 		m_LocalVariables.Add(lb.LocalIndex, lb)
 
+		If m_debugBuild Then
+			lb.SetLocalSymInfo(Name)
+		End If
+
 		Return lb.LocalIndex
 	End Function
 
@@ -316,5 +299,105 @@ Public Class CodeGen
 		lb = m_LocalVariables(Index)
 		m_ILGen.Emit(OpCodes.Ldloc, lb)
 
+	End Sub
+
+	Public Sub EmitSequencePoint( _
+					ByVal startLine As Integer, _
+					ByVal startColumn As Integer, _
+					ByVal endLine As Integer, _
+					ByVal endColumn As Integer _
+				)
+
+		m_ILGen.MarkSequencePoint( _
+						m_symbolStore, _
+						startLine, _
+						startColumn, _
+						endLine, _
+						endColumn _
+				)
+
+	End Sub
+
+	Public Sub EmitNOP()
+		m_ILGen.Emit(OpCodes.Nop)
+	End Sub
+
+	Public Sub EmitBreak()
+		m_ILGen.Emit(OpCodes.Break)
+	End Sub
+
+	Public Sub New( _
+			ByVal sourceFileName As String, _
+			ByVal outputFileName As String, _
+			ByVal assemblyName As String, _
+			ByVal debugBuild As Boolean _
+		)
+
+		m_SaveToFile = outputFileName
+		m_debugBuild = debugBuild
+
+		' Compiling a CLR language produces an assembly.
+		' An assembly has one or more modules.
+		' Each module has one or more types:
+		' 				(structures or classes)
+		' Each type has one or more methods.
+		' Methods are where actual code resides.
+
+		' Create a new assembly. An assembly must have a name.
+		' An assembly's name consists of up to four parts:
+		' a simple name, a four-part version number, the default
+		' Culture of the assembly, and optionally a public key token.
+		' At the moment, we will only set the simple name. The
+		' version number will default to 0.0.0.0, and the culture
+		' will default to neutral.
+		Dim an As New assemblyName()
+		an.Name = assemblyName
+
+		m_producedAssembly = _
+			AppDomain.CurrentDomain.DefineDynamicAssembly( _
+								an, AssemblyBuilderAccess.Save _
+			)
+			
+		' In the newly created assembly, create a
+		' module with the same name.
+		' The last parameter of DefineDynamicModule
+		' indicates whether debug information will
+		' be emitted for this assembly
+		m_producedmodule = m_producedAssembly.DefineDynamicModule( _
+											assemblyName, _
+											outputFileName, _
+											m_debugBuild _
+		)
+
+		' If this is a debug build, create a symbol
+		' store for the module.
+		If m_debugBuild Then
+			m_symbolStore = m_producedmodule.DefineDocument( _
+											sourceFileName, _
+											Nothing, _
+											Nothing, _
+											SymDocumentType.Text _
+			)
+		End If
+
+		' In the newly created module, create a class called
+		' "MainClass".
+
+		m_producedtype = m_producedmodule.DefineType("MainClass")
+
+		' In MainClass, create a Shared (static) method
+		' with Public scope, called "MainMethod".
+		m_producedmethod = 	m_producedtype.DefineMethod(
+										"MainMethod", _
+										MethodAttributes.Public _
+											Or _
+										MethodAttributes.Static, _
+										Nothing, _
+										Nothing _
+		)
+
+		' All IL code that we produce will be contained
+		' in MainMethod.
+		m_ILGen = m_producedmethod.GetILGenerator()
 	End Sub
 End Class

@@ -46,6 +46,34 @@ Public Partial Class Parser
 
         Return result.ToString
     End Function
+
+    Private Sub GenerateSequencePoint()
+        ' If this is a debug build
+        If m_Gen.DebugBuild Then
+            ' Generate a sequence point that corresponds
+            ' to the current source line. Line numbers in
+            ' the symbol store are 1-based, and column
+            ' numbers are 0-based. We have to pass the
+            ' starting and ending lines and columns
+            ' in the source for the statement. We always
+            ' pass the current line, and the first and
+            ' last column of the current line.
+            m_Gen.EmitSequencePoint( _
+                            m_LinePos, _
+                            0, _
+                            m_LinePos, _
+                            m_LineLength + 1 _
+            )
+        End If
+    End Sub
+
+    Public Sub GenerateNOP()
+        ' We need to generate a NOP instruction for
+        ' some commands, only for debug builds
+        If m_Gen.DebugBuild Then
+            m_Gen.EmitNOP()
+        End If
+    End Sub
 #End Region
 
 #Region "Recognizers"
@@ -1129,6 +1157,8 @@ Public Partial Class Parser
      
         SkipWhiteSpace()
         
+        GenerateSequencePoint()
+
         Select Case variable.Type.ToString()
             Case "System.Int32"
                 result = ParseNumericExpression()

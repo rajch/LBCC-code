@@ -56,6 +56,7 @@ Public Partial Class Parser
         AddCommand("case",          AddressOf ParseCaseCommand)
         AddCommand("default",       AddressOf ParseDefaultCommand)
         AddCommand("fallthrough",   AddressOf ParseFallThroughCommand)
+        AddCommand("stop",          AddressOf ParseStopCommand)
     End Sub
 
     Private Sub AddType(typeName As String, type As Type)
@@ -174,6 +175,8 @@ Public Partial Class Parser
 
         SkipWhiteSpace()
 
+        GenerateSequencePoint()
+
         result = ParseExpression()
         If result.code = 0 Then
             If m_LastTypeProcessed.Equals( _
@@ -246,6 +249,12 @@ Public Partial Class Parser
                 If CurrentToken.ToLowerInvariant() = "repeat" Then
                     result = ParseUntilCommand()
                 Else
+                    ' For any End command other than
+                    ' End Repeat, we need to generate
+                    ' a NOP.
+                    GenerateSequencePoint()
+                    GenerateNOP()
+                    
                     result = BlockEnd()
                 End If
             Else
@@ -327,6 +336,9 @@ Public Partial Class Parser
         Dim result As ParseStatus
 
         SkipWhiteSpace()
+
+        GenerateSequencePoint()
+
         result = ParseBooleanExpression()
 
         If result.Code=0 Then
@@ -417,6 +429,15 @@ Public Partial Class Parser
                 ' execution to continue after the Else command.
                 m_Gen.EmitLabel(currBlock.StartPoint)
 
+                ' Note that the sequence point and the
+                ' NOP are emitted AFTER the startpoint
+                ' label. This will ensure that when the
+                ' debugger jumps to the Else part of an
+                ' If block, it will highlight the Else
+                ' statement
+                GenerateSequencePoint()
+                GenerateNOP()
+
                 ' Set the Else flag
                 m_ElseFlag = True
 
@@ -459,6 +480,12 @@ Public Partial Class Parser
             ' ElseIf block
             m_Gen.EmitLabel(currBlock.StartPoint)
 
+            ' Note that the sequence point is emitted AFTER the
+            ' startpoint label. This will ensure that when the
+            ' debugger jumps to an ElseIf in an If block, it will
+            ' highlight the ElseIf statement
+            GenerateSequencePoint()
+
             SkipWhiteSpace()
             ' Parse the ElseIf condition
             result = ParseBooleanExpression()
@@ -490,6 +517,10 @@ Public Partial Class Parser
         Dim result As ParseStatus
                
         SkipWhiteSpace()
+
+        ' TODO: Explore this
+        GenerateSequencePoint()
+        
         If EndOfLine Then
             result = CreateError(1, "a boolean expression")
         Else
@@ -559,6 +590,8 @@ Public Partial Class Parser
             Else
                 SkipWhiteSpace()
 
+                GenerateSequencePoint()
+
                 If Not EndOfLine Then
                     ' There should be a When clause here    
                     result = ParseWhenClause()
@@ -609,6 +642,14 @@ Public Partial Class Parser
             startpoint = m_Gen.DeclareLabel()
             m_Gen.EmitLabel(startpoint)
 
+            ' Note that the sequence point and the
+            ' NOP are emitted AFTER the startpoint
+            ' label. This will ensure that when the
+            ' debugger jumps back, it will highlight
+            ' the Repeat statement
+            GenerateSequencePoint()
+            GenerateNOP()
+
             ' Generate endpoint
             endpoint = m_Gen.DeclareLabel()
 
@@ -649,6 +690,8 @@ Public Partial Class Parser
             If EndOfLine Then
                 result = CreateError(1, "a boolean expression")
             Else
+                GenerateSequencePoint()
+
                 result = ParseBooleanExpression()
 
                 If result.Code = 0 Then
@@ -680,6 +723,14 @@ Public Partial Class Parser
             ' Generate and emit startpoint
             startpoint = m_Gen.DeclareLabel()
             m_Gen.EmitLabel(startpoint)
+
+            ' Note that the sequence point and the
+            ' NOP are emitted AFTER the startpoint
+            ' label. This will ensure that when the
+            ' debugger jumps back, it will highlight
+            ' the Loop statement
+            GenerateSequencePoint()
+            GenerateNOP()
 
             ' Generate endpoint
             endpoint = m_Gen.DeclareLabel()
@@ -727,6 +778,8 @@ Public Partial Class Parser
         If Not variable.Type.Equals(GetType(Integer)) Then
             Return CreateError(1, "a numeric variable")
         End If
+
+        GenerateSequencePoint()
 
         ' Parse the next two tokens as an assignment statement
         result = ParseAssignmentStatement()
@@ -914,8 +967,9 @@ Public Partial Class Parser
 
         SkipWhiteSpace()
 
+        GenerateSequencePoint()
+
         ' Parse an Expression
-        SkipWhiteSpace()
         result = ParseExpression()
 
         If result.Code<>0 Then
@@ -1024,6 +1078,12 @@ Public Partial Class Parser
             m_Gen.EmitLabel(switchblock.StartPoint)
         End If
 
+        ' Note that the sequence point is emitted AFTER
+        ' the startpoint label is emitted. This will ensure
+        ' that when the debugger jumps to a Case in a Select
+        ' block, it will highlight the Case statement
+        GenerateSequencePoint()
+        
         ' Create new startpoint for the next case
         switchblock.StartPoint = m_Gen.DeclareLabel()
 
@@ -1115,6 +1175,15 @@ Public Partial Class Parser
             m_Gen.EmitLabel(switchblock.StartPoint)
         End If
 
+        ' Note that the sequence point and the
+        ' NOP are emitted AFTER the startpoint
+        ' label. This will ensure that when the
+        ' debugger jumps to the Default part of
+        ' a Case block, it will highlight the
+        ' Default statement
+        GenerateSequencePoint()
+        GenerateNOP()
+
         ' Reset the Case flag
         m_SwitchState.CaseFlag = False
 
@@ -1142,6 +1211,49 @@ Public Partial Class Parser
             result = Ok()
         End If
 
+        Return result
+    End Function
+
+    Private Function ParseStopCommand() As ParseStatus
+        Dim result As ParseStatus
+
+        ' If not a debug build, ignore the Stop
+        ' instruction
+        If Not m_Gen.DebugBuild Then
+            Return Ok()
+        End If
+
+        SkipWhiteSpace()
+        
+        ' If there is no When clause
+        If EndOfLine Then
+            ' Emit a break
+            m_Gen.EmitBreak()
+            GenerateSequencePoint()
+            GenerateNOP()
+            result = Ok()
+        Else
+            result = ParseWhenClause()
+        
+            If result.Code = 0 Then
+
+                Dim afterBreakPoint As Integer = _
+                                m_Gen.DeclareLabel()
+
+                ' If the condition evaluates to
+                ' false, jump past the break
+                m_Gen.EmitBranchIfFalse(afterBreakPoint)
+
+                ' Emit the break
+                m_Gen.EmitBreak()
+                GenerateSequencePoint()
+                GenerateNOP()
+
+                ' Emit the label
+                m_Gen.EmitLabel(afterBreakPoint)
+            End If
+        End If
+        
         Return result
     End Function
 #End Region
