@@ -466,6 +466,8 @@ Public Partial Class Parser
 
                 If IsValidCommand(name) Then
                     result = ParseCommand()
+                ElseIf m_inCommentBlock Then
+                    result = Ok()
                 ElseIf IsValidType(name) Then
                     result = ParseTypeFirstDeclaration()
                 Else
