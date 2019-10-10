@@ -192,3 +192,12 @@ Public Class SwitchState
     Public DefaultFlag As Boolean
     Public FallthroughFlag As Boolean
 End Class
+
+Public Class CommandArgs
+    Public SourceFile As String
+    Public TargetFile As String
+    Public AssemblyName As String
+    Public DebugBuild As Boolean
+    Public Valid As Boolean
+    Public Message As String
+End Class
